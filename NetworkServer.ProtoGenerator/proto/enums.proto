@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package internal.protocol;
+
+
+
+enum EServerType
+{
+  EServerType_Gateway = 0;
+  EServerType_MainApi = 1;
+  EServerType_SubApi = 2;
+}
+
+
+enum EPacketSide
+{
+  EPacketSide_Server = 0;
+  EPacketSide_Client = 1;
+}
+
+enum EApiType
+{
+  EApiType_GameApi = 0;
+}
+
+enum EActorType
+{
+  Server = 0;
+  User = 1;
+}
+
+
+enum SubApiStickyType
+{
+  /// <summary>
+  /// 세션별 고정 서버 라우팅
+  /// - 특정 세션/사용자가 항상 같은 서버로 연결
+  /// - 서버 메모리에 상태를 유지하는 경우 사용
+  /// - 예: 게임 서버, 실시간 채팅 서버
+  /// </summary>
+  Sticky = 0;
+
+  /// <summary>
+  /// 매번 라운드로빈 라우팅
+  /// - 요청마다 다른 서버로 분산
+  /// - 상태 없는(stateless) 서비스에 사용
+  /// - 예: 사용자 정보 조회 API, 결제 API
+  /// </summary>
+  NoneSticky = 1;
+}

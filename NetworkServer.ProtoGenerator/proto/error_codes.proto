@@ -1,0 +1,12 @@
+﻿syntax = "proto3";
+
+package internal.protocol;
+
+
+enum InternalResult
+{
+  InternalResult_Success = 0;
+  InternalResult_NotFound_Actor = 1;
+  InternalResult_Message_Parse_Failed = 2;
+  InternalResult_NotFound_Node = 3;
+}
