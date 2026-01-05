@@ -19,7 +19,7 @@ public class Lz4Holder
         return Lz4.Value!.Decompress(compressed, originalSize);
     }
     
-    public  int Decompress(ReadOnlySpan<byte> compressed, Span<byte> output)
+    public int Decompress(ReadOnlySpan<byte> compressed, Span<byte> output)
     {
         return Lz4.Value!.Decompress(compressed, output);
     }

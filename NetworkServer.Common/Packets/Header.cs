@@ -1,9 +1,9 @@
-﻿using System;
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using Google.Protobuf;
+using Network.Server.Common.Utils;
 
-namespace Network.Server;
+namespace Network.Server.Common.Packets;
 
 [Flags]
 public enum PacketFlags : byte
@@ -98,11 +98,20 @@ public static class PacketExtensions
         // msgSeq
         BinaryPrimitives.WriteUInt16LittleEndian(buffer[offset..], packet.header.MsgSeq);
         offset += 2;
-            
+        
         // payload
-        int payloadSize = packet.message.CalculateSize();
-        packet.message.WriteTo(buffer.Slice(offset, payloadSize));
-        offset += payloadSize;
+        int payloadSize = packetSize - packet.header.GetSize();
+
+        if (packet.header.IsCompressed)
+        {
+            ProtobufCompressor
+        }
+        else
+        {
+            packet.message.WriteTo(buffer.Slice(offset, payloadSize));
+            offset += payloadSize;
+        }
+        
         return offset;
     }
 }

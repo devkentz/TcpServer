@@ -53,3 +53,13 @@ message StopRes
 {
   
 }
+
+message InGameConnectionReq
+{
+  
+}
+
+message InGameConnectionRes
+{
+  
+}

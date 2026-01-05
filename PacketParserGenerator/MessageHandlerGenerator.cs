@@ -45,7 +45,7 @@ namespace PacketParserGenerator
             if (symbol == null) return null;
 
             var attributes = symbol.GetAttributes();
-            if (!attributes.Any(a => a.AttributeClass?.Name == "NodeControllerAttribute"))
+            if (!attributes.Any(a => a.AttributeClass?.Name == "ServerControllerAttribute"))
                 return null;
 
             var methods = new List<HandlerMethod>();
@@ -101,12 +101,24 @@ namespace PacketParserGenerator
             sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
             sb.AppendLine("using System.Threading.Tasks;");
             sb.AppendLine("using Google.Protobuf;");
-            sb.AppendLine("using Network.Server.Node.Core;");
+            sb.AppendLine("using Network.Server.Front.Core;");
             
             sb.AppendLine(@"
-namespace Network.Server.Node.Generated
+namespace Network.Server.Generated
 {
-    //using Network.Server.Node.Core;
+
+    public static class ServerMessageHandlerExtensions
+    {
+        public static IServiceCollection AddHandler(this IServiceCollection collection)
+        {
+            return collection.AddSingleton<MessageHandler>(_ =>
+            {
+                var handler = new GeneratedMessageHandler();
+                handler.Initialize();
+                return handler;
+            });
+        }
+    }
 
     public class GeneratedMessageHandler : MessageHandler
     {
@@ -121,11 +133,11 @@ namespace Network.Server.Node.Generated
                 {
                     if (method.IsActorHandler)
                     {
-                        sb.AppendLine($@"            AddHandler<{method.RequestType}, {method.ResponseType}>({method.MsgId}, (provider, actor, req) => provider.GetRequiredService<{controller.Namespace}.{controller.ClassName}>().{method.Name}(actor, req));");
+                        sb.AppendLine($@"            AddHandler<{method.RequestType}>({method.RequestType}.MsgId, (provider, actor, req) => provider.GetRequiredService<{controller.Namespace}.{controller.ClassName}>().{method.Name}(actor, req));");
                     }
                     else
                     {
-                        sb.AppendLine($@"            AddHandler<{method.RequestType}, {method.ResponseType}>({method.MsgId}, (provider, req) => provider.GetRequiredService<{controller.Namespace}.{controller.ClassName}>().{method.Name}(req));");
+                        sb.AppendLine($@"            AddHandler<{method.RequestType}>({method.RequestType}.MsgId, (provider, req) => provider.GetRequiredService<{controller.Namespace}.{controller.ClassName}>().{method.Name}(req));");
                     }
                 }
             }
