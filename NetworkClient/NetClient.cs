@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Google.Protobuf;
@@ -33,8 +31,10 @@ namespace NetworkClient
         private readonly ProtoPacketParser _packetParser;
         private readonly ArrayPoolBufferWriter _receiveBuffer = new();
         private readonly ConcurrentQueue<(byte[] buffer, int length)> _sendQueue = new();
-        private readonly ConcurrentQueue<(Header header, IMessage message)> _recvList = new();
+        private readonly ConcurrentQueue<NetworkPacket> _recvList = new();
 
+        private readonly MessageHandler _handler;
+        
         private TaskCompletionSource<bool>? _taskOnConnector;
         private TaskCompletionSource<IMessage>? _requestTcs = null;
 
@@ -49,7 +49,7 @@ namespace NetworkClient
 
         private long Sid => Socket.Handle.ToInt64();
 
-        public NetClient(TimeProvider timeProvider, ILogger logger)
+        public NetClient(TimeProvider timeProvider, ILogger logger, MessageHandler handler)
             : base("localhost", 0)
         {
             _logger = logger;
@@ -59,9 +59,11 @@ namespace NetworkClient
             OptionKeepAlive = true;
             OptionSendBufferSize = 1024 * 64;
             OptionReceiveBufferSize = 1024 * 256;
+            
+            _handler = handler;
         }
 
-        public async Task<bool> ConnectAsync(string token, CancellationTokenSource? cancellationTokenSource = null, int timeoutMs = 15_000)
+        public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default, int timeoutMs = 15_000)
         {
             _taskOnConnector = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -69,7 +71,7 @@ namespace NetworkClient
 
             try
             {
-                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationTokenSource.Token, timeoutCts.Token);
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
                 Connect();
 
@@ -80,19 +82,16 @@ namespace NetworkClient
             catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
             {
                 _logger.LogWarning("Connection timed out after {Timeout}ms", timeoutMs);
-                Disconnect();
                 throw new TimeoutException($"Connection timed out after {timeoutMs}ms");
             }
             catch (OperationCanceledException)
             {
                 _logger.LogWarning("Connection cancelled by user");
-                Disconnect();
                 throw;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Connection failed");
-                Disconnect();
                 throw;
             }
         }
@@ -176,7 +175,7 @@ namespace NetworkClient
         {
             while (_recvList.TryDequeue(out var packet))
             {
-                
+                _handler.Handling(packet);
             }
         }
 
@@ -185,7 +184,7 @@ namespace NetworkClient
             var size = (header, message).CalcSize();
             var buffer = ArrayPool<byte>.Shared.Rent(size);
 
-            (header, message).CopyTo(buffer);
+            (header, message).WriteToSpan(buffer);
             _sendQueue.Enqueue((buffer, size));
         }
 
@@ -215,10 +214,10 @@ namespace NetworkClient
 
                 foreach (var packet in packets)
                 {
-                    if (_requestTcs != null && packet.header.MsgSeq == _msgSeq + 1)
+                    if (_requestTcs != null && packet.Header.MsgSeq == _msgSeq + 1)
                     {
-                        _msgSeq = packet.header.MsgSeq;
-                        _requestTcs?.SetResult(packet.message);
+                        _msgSeq = packet.Header.MsgSeq;
+                        _requestTcs?.SetResult(packet.Message);
                         continue;
                     }
 

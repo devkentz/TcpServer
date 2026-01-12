@@ -1,6 +1,11 @@
 using Google.Protobuf;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Options;
 using Network.Server.Common.DistributeLock;
+using Network.Server.Common.Packets;
+using Network.Server.Common.Utils;
 using Network.Server.Front.Actor;
+using Network.Server.Front.Config;
 using Network.Server.Front.Core;
 using Proto.Test;
 using StackExchange.Redis;
@@ -10,25 +15,47 @@ namespace NetworkEngine.Tests.Node;
 /// <summary>
 /// InGameConnection 요청을 큐로 처리하는 서비스
 /// </summary>
+
+public class UserActor : Actor
+{
+    public UserActor(ILogger logger, NetworkSession session, long actorId, IServiceProvider rootProvider) 
+        : base(logger, session, actorId, rootProvider)
+    {
+    }
+}
+
 public class InGameConnectionQueue : IInGameConnectionQueue, IDisposable
 {
     private readonly IServiceProvider _serviceProvider;
+    private readonly UniqueIdGenerator _uniqueIdGenerator;
+    private readonly IConnectionMultiplexer _database;
     private readonly ILogger<InGameConnectionQueue> _logger;
     private readonly IActorManager _actorManager;
     private readonly TimeProvider _timeProvider;
     private volatile bool _isDisposed = false;
+    private readonly SemaphoreSlim _semaphoreSlim;
+    private readonly CancellationTokenSource _cancellationToken;
 
     public InGameConnectionQueue(
         IServiceProvider serviceProvider,
+        UniqueIdGenerator uniqueIdGenerator,
         ILogger<InGameConnectionQueue> logger,
         IActorManager actorManager,
-        IDatabase redis,
-        TimeProvider timeProvider)
+        IOptions<FrontServerConfig> frontServerConfig,
+        TimeProvider timeProvider,
+        [FromKeyedServices("InGameConnectionQueue")]
+        IConnectionMultiplexer redisConnectionMultiplexer)
     {
         _serviceProvider = serviceProvider;
+        _uniqueIdGenerator = uniqueIdGenerator;
         _logger = logger;
         _actorManager = actorManager;
         _timeProvider = timeProvider;
+        _database = redisConnectionMultiplexer;
+
+        _cancellationToken = new CancellationTokenSource();
+        var config = frontServerConfig.Value;
+        _semaphoreSlim = new SemaphoreSlim(config.LoginConcurrentSize, config.LoginConcurrentSize);
     }
 
     public void EnqueueAsync(NetworkSession session, ActorMessage message)
@@ -39,23 +66,40 @@ public class InGameConnectionQueue : IInGameConnectionQueue, IDisposable
 
     public bool IsInGameConnectionPacket(int msgId)
     {
-        // PacketType enum에서 정의된 InGame Connection 패킷 타입들
-        return msgId == InGameConnectionReq.MsgId;
+        return msgId == LoginGameRes.MsgId;
     }
 
     private async Task ProcessConnectionAsync(NetworkSession session, ActorMessage message)
     {
         try
         {
+            await _semaphoreSlim.WaitAsync(_cancellationToken.Token);
+
+            var req = (LoginGameReq) message.Message;
+
+            var database = _database.GetDatabase();
+            
+            //같은 유저에 대한, 로그인 처리가 중복으로 일어나지 않게 하기 위한, 레디스를 이용한 분산락
+            await using var lockObj = await database.TryAcquireLockAsync(req.ExternalId);
+            if (lockObj == null)
+                throw new Exception($"Unable to acquire lock for {req.ExternalId}");
+
+            //TODO : DB처리
+            //TODO : REDIS에 유저 세션 객체 저장 & 중복접속 처리
+            
             _logger.LogInformation("Processing connection request for session {SessionId}", session.SessionId);
 
-            var connectionReq = (InGameConnectionReq)message.Message;
-            
-            
+            _actorManager.AddActor(new UserActor(_logger, session, _uniqueIdGenerator.NextId(), _serviceProvider));
+            session.SendToClient(new Header(), new LoginGameRes());
         }
-        catch (Exception ex)
+        catch (OperationCanceledException e)
         {
-            _logger.LogError(ex, "Failed to process connection for session {SessionId}", session.SessionId);
+            _logger.LogInformation(e, "Processing connection request for session {SessionId}", session.SessionId);
+        }
+        catch (Exception e)
+        {
+            _logger.LogInformation(e, "error {SessionId}", session.SessionId);
+            session.SendToClient(new Header(flags: PacketFlags.HasError, errorCode: (ushort)ErrorCode.ServerError), new LoginGameRes());
         }
     }
 
@@ -66,13 +110,8 @@ public class InGameConnectionQueue : IInGameConnectionQueue, IDisposable
 
         _isDisposed = true;
 
-        try
-        {
-            _logger.LogInformation("InGameConnection queue disposed successfully");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during InGameConnection queue disposal");
-        }
+        _cancellationToken.Cancel();
+        _cancellationToken.Dispose();
+        _semaphoreSlim.Dispose();
     }
 }

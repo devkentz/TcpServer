@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
 using NetCoreServer;
+using Network.Server.Common;
 using Network.Server.Common.Memory;
 using Network.Server.Common.Packets;
 using Network.Server.Front.Actor;
@@ -20,11 +21,12 @@ public class NetworkSession(
     : TcpSession(clientSocketServer)
 {
     private readonly ArrayPoolBufferWriter _buffer = new();
-    private readonly PacketParserForClient _packetParser = new();
+    private readonly ProtoPacketParser _packetParser = new();
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Create();
     public event EventHandler<EventArgs>? Connected;
     public event EventHandler<EventArgs>? Disconnected;
-    public Action<NetworkSession, ActorMessage>? PacketReceived;
+    
+    internal Action<NetworkSession, ActorMessage>? PacketReceived;
 
     private IActor? _actor;
 

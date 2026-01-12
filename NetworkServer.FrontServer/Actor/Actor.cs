@@ -19,6 +19,7 @@ public class Actor : IActor, IDisposable
         _rootProvider = rootProvider;
         ActorId = actorId;
         _session = session;
+        _session.Actor = this;
         _handler = _rootProvider.GetRequiredService<MessageHandler>();
         _messageQueue = new QueuedResponseWriter<ActorMessage>(ProcessMessageAsync, logger);
     }

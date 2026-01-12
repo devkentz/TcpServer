@@ -54,12 +54,32 @@ message StopRes
   
 }
 
-message InGameConnectionReq
+message CompressMessage
+{
+  string Content = 1;
+  int32 Value = 2; 
+}
+
+message ThreadTestMessage
+{
+  int32 threadId = 1;
+  int32 iteration = 2;
+  string payload = 3;
+}
+
+message LoginGameReq
+{
+  string ExternalId = 1;
+}
+
+message LoginGameRes
 {
   
 }
 
-message InGameConnectionRes
+
+enum ErrorCode
 {
-  
+  InvalidError = 0;
+  ServerError = 1;
 }

@@ -26,7 +26,6 @@ public class NodeBasicTests(ITestOutputHelper output) : IAsyncLifetime
         await _factory.DisposeAsync();
     }
  
-
     [Fact]
     public async Task Should_Register_Node_Successfully()
     {

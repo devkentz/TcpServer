@@ -30,10 +30,7 @@ namespace Network.Server.Front.Core
         private NetworkSession CreateSession(ClientSocketServer clientSocketServer)
         {
             var sessionLogger = ServiceProvider.GetRequiredService<ILogger<NetworkSession>>();
-            return new NetworkSession(_idGenerator.NextId(), clientSocketServer, sessionLogger)
-            {
-                PacketReceived = PacketFromClient
-            };
+            return new NetworkSession(_idGenerator.NextId(), clientSocketServer, sessionLogger) {PacketReceived = PacketFromClient };
         }
 
         /// <summary>

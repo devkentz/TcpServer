@@ -8,6 +8,8 @@ public class FrontServerConfig
     public bool OptionReuseAddress { get; set; }
     public int OptionSendBufferSize { get; set; }
     public int OptionReceiveBufferSize { get; set; }
+
+    public int LoginConcurrentSize { get; set; } = 500;
     public string Address { get; set; } = string.Empty;
     public int Port { get; set; }
 }
