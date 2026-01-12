@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nrefactor: Migrate NetworkServer.Node to NetworkServer.FrontServer architecture\n\nMajor architectural refactoring to simplify the network server structure:\n\n- Rename NetworkServer.Node to NetworkServer.FrontServer for clarity\n- Reorganize Actor components into dedicated Actor/ folder\n- Remove Node cluster-related code \\(IClusterRegistry, RedisClusterRegistry, etc.\\)\n- Simplify server architecture with AbstractServer and ClientSocketServer\n- Add FrontServer.cs as main server implementation\n- Update packet handling with improved compression \\(LZ4\\)\n- Migrate tests from NetworkEngine.Tests.Node to NetworkEngine.Tests.Front\n- Add NetworkClient project for client-side implementation\n- Remove unnecessary Node network communication layer\n- Streamline MessageHandler and NetworkSession implementations\n\nBreaking changes:\n- NetworkServer.Node project no longer exists\n- Node cluster functionality removed\n- API structure simplified for frontend-focused architecture\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git add:*)"
+    ]
+  }
+}
