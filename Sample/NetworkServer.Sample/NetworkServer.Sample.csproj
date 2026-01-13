@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>NetworkServer.Sample</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Core dependencies -->
+        <PackageReference Include="Microsoft.Extensions.Hosting" />
+        <PackageReference Include="Microsoft.Extensions.Logging" />
+        <PackageReference Include="Serilog" />
+        <PackageReference Include="Serilog.Extensions.Hosting" />
+        <PackageReference Include="Serilog.Settings.Configuration" />
+        <PackageReference Include="Serilog.Sinks.Console" />
+        <PackageReference Include="Serilog.Sinks.File" />
+        <PackageReference Include="StackExchange.Redis" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\NetworkServer.FrontServer\NetworkServer.FrontServer.csproj" />
+        <ProjectReference Include="..\..\NetworkServer.Common\NetworkServer.Common.csproj" />
+        <ProjectReference Include="..\..\NetworkServer.ProtoGenerator\NetworkServer.ProtoGenerator.csproj" />
+        <ProjectReference Include="..\..\Protocol\Protocol.csproj" />
+        <ProjectReference Include="..\..\Tests\NetworkEngine.Tests.Front\NetworkEngine.Tests.Front.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="appsettings.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="appsettings.Development.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+</Project>
