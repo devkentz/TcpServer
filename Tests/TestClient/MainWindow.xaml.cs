@@ -45,6 +45,7 @@ namespace TestClient
 
 			_networkUpdateTimer.Interval = new TimeSpan(0, 0, 0, 0, 10);
 			_networkUpdateTimer.Tick += (o, e) => _client.Update();
+			_networkUpdateTimer.Start();
 		}
 
 		public void Terminate()
@@ -183,7 +184,9 @@ namespace TestClient
 				if (PacketListBox.SelectedItem is PacketConvertor packetConvertor)
 				{
 					var textRange = new TextRange(PacketEditTextBox.Document.ContentStart, PacketEditTextBox.Document.ContentEnd);
-					_client.Send(packetConvertor.ToPacket(textRange.Text));
+					var response = await _client.RequestAsync(packetConvertor.ToPacket(textRange.Text));
+					
+					PrintLog(response.ToString()!);
 				}
 			}
 			catch (Exception exception)

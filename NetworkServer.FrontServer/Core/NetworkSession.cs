@@ -50,13 +50,13 @@ public class NetworkSession(
 
     protected override void OnConnecting()
     {
-        logger.LogDebug($"TCP gateway OnConnected - [Gid:{SessionId}]");
+        logger.LogDebug($"Session OnConnected - [sid:{SessionId}]");
         Connected?.Invoke(sessionId, EventArgs.Empty);
     }
 
     protected override void OnDisconnected()
     {
-        logger.LogDebug($"TCP gateway OnDisConnected - [Gid:{SessionId}]");
+        logger.LogDebug($"Session  OnDisConnected - [sid:{SessionId}]");
         Disconnected?.Invoke(this, EventArgs.Empty);
     }
 

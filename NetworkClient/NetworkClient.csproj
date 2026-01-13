@@ -25,7 +25,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\NetworkServer.Common\NetworkServer.Common.csproj" />
-	  <ProjectReference Include="..\NetworkServer\NetworkServer.csproj" />
+	  <ProjectReference Include="..\NetworkServer.ProtoGenerator\NetworkServer.ProtoGenerator.csproj" />
 	</ItemGroup>
 
 </Project>

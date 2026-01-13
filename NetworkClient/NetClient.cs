@@ -22,7 +22,6 @@ namespace NetworkClient
 
     public class BaseController
     {
-        
     }
 
     public class NetClient : TcpClient
@@ -34,11 +33,11 @@ namespace NetworkClient
         private readonly ConcurrentQueue<NetworkPacket> _recvList = new();
 
         private readonly MessageHandler _handler;
-        
+
         private TaskCompletionSource<bool>? _taskOnConnector;
         private TaskCompletionSource<IMessage>? _requestTcs = null;
 
-        private readonly int _timeoutMs = 15000;
+        private readonly int _timeoutMs = 15_000_000;
         private ushort _msgSeq = 0;
 
         public ClientState State => IsConnected ? ClientState.Connected : ClientState.Disconnected;
@@ -59,7 +58,9 @@ namespace NetworkClient
             OptionKeepAlive = true;
             OptionSendBufferSize = 1024 * 64;
             OptionReceiveBufferSize = 1024 * 256;
-
+            
+            
+            
             _handler = handler;
         }
 
@@ -121,6 +122,12 @@ namespace NetworkClient
         public async Task<TResponse> RequestAsync<TResponse>(IMessage request, CancellationToken cancellationToken = default)
             where TResponse : IMessage
         {
+            return (TResponse) await RequestAsync(request, cancellationToken);
+        }
+
+
+        public async Task<IMessage> RequestAsync(IMessage request, CancellationToken cancellationToken = default)
+        {
             if (!IsConnected)
                 throw new NetClientException((ushort) InternalErrorCode.Disconnected, request);
 
@@ -143,7 +150,7 @@ namespace NetworkClient
 
                 EnqueueSend(new Header(msgId: msgId, msgSeq: _msgSeq), request);
 
-                return (TResponse) await _requestTcs.Task
+                return await _requestTcs.Task
                     .WaitAsync(linkedCts.Token)
                     .ConfigureAwait(false);
             }
@@ -158,7 +165,7 @@ namespace NetworkClient
             while (_sendQueue.TryDequeue(out var packet))
             {
                 base.Send(packet.buffer, 0, packet.length);
-                ArrayPool<byte>.Shared.Return(packet.buffer, true);
+                ArrayPool<byte>.Shared.Return(packet.buffer);
             }
         }
 
@@ -167,7 +174,7 @@ namespace NetworkClient
             if (State == ClientState.Disconnected)
                 return;
 
-            SendQueueUpdate();
+            //SendQueueUpdate();
             ProcessPacket();
         }
 
@@ -185,7 +192,11 @@ namespace NetworkClient
             var buffer = ArrayPool<byte>.Shared.Rent(size);
 
             (header, message).WriteToSpan(buffer);
-            _sendQueue.Enqueue((buffer, size));
+            //_sendQueue.Enqueue((buffer, size));
+            
+            base.Send(buffer, 0, size);
+            
+            ArrayPool<byte>.Shared.Return(buffer);
         }
 
         protected override void OnConnected()
@@ -193,7 +204,6 @@ namespace NetworkClient
             _logger.LogInformation("client connected - [sid:{Sid}]", Sid);
 
             _taskOnConnector?.SetResult(true);
-            _taskOnConnector = null;
             OnConnect?.Invoke(true);
         }
 

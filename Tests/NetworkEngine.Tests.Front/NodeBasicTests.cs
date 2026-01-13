@@ -33,9 +33,13 @@ public class NodeBasicTests(ITestOutputHelper output) : IAsyncLifetime
         {
 
             var server1 = await _factory.CreateNodeAsync(output);
+
+            await server1.RunAsync();
             
             // 노드 시작 후 잠시 대기
             await Task.Delay(5000);
+            
+            
 
         }
         catch (Exception e)
