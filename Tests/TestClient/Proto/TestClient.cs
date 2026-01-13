@@ -1,6 +1,8 @@
 ﻿using Google.Protobuf;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using PlayHouseConnector;
+using NetworkClient;
+using NetworkClient.Config;
 using Proto;
 
 namespace TestClient.Proto;
@@ -8,15 +10,21 @@ namespace TestClient.Proto;
 public class TestClient
 {
 	private readonly IClientEvent _clientEvent;
-	private readonly Connector _connector = new();
+	private NetClient? _netClient;
+	private readonly TestClientMessageHandler _messageHandler;
+	private readonly ILogger<TestClient> _logger;
 
-	public TestClient(IClientEvent clientEvent)
+	public TestClient(IClientEvent clientEvent, ILogger<TestClient> logger)
 	{
 		_clientEvent = clientEvent;
-		_connector.OnReceive += OnReceive;
-		_connector.OnError += OnError;
-		_connector.OnConnect += OnConnect;
-		_connector.OnDisconnect += OnDisconnect;
+
+		// Logger 설정
+		_logger = logger;
+		
+		// MessageHandler 설정
+		_messageHandler = new TestClientMessageHandler();
+		_messageHandler.OnMessageReceived += OnReceive;
+		_messageHandler.Initialize();
 	}
 
 	private void OnDisconnect()
@@ -29,124 +37,54 @@ public class TestClient
 		_clientEvent.OnConnect(result);
 	}
 
-	private void OnError(ushort serviceId, ushort errorCode, IMessage packet)
-	{
-		_clientEvent.PrintLog($"Error:{errorCode} {JsonConvert.SerializeObject(packet, Formatting.Indented)}");
-	}
-
 	public async Task<bool> ConnectAsync(string ip, int port)
 	{
-		_connector.Init(new ConnectorConfig
-		{
-			RequestTimeoutMs = 30000,
-			Host = ip,
-			Port = port,
-			HeartBeatIntervalMs = 0,
-			ConnectionIdleTimeoutMs = 30000
-		});
+		// 기존 연결이 있으면 정리
+		_netClient?.Dispose();
 
-		return await _connector.ConnectAsync();
+		// NetClient 생성
+		_netClient = new NetClient(ip, port, _logger, _messageHandler);
+		_netClient.OnConnect += OnConnect;
+		_netClient.OnDisconnect += OnDisconnect;
+
+		return await _netClient.ConnectAsync();
 	}
 
-
-	private void OnReceive(ushort serviceId, IMessage packet)
+	private void OnReceive(IMessage packet)
 	{
 		var multilineText = JsonConvert.SerializeObject(packet, Formatting.Indented);
 		_clientEvent.PrintLog($"{packet.Descriptor.Name} {Environment.NewLine} {multilineText}");
 	}
 
-	public void Send(ushort serviceId, IMessage message)
+	public void Send(IMessage message)
 	{
-		_connector.Send(serviceId, message);
+		_netClient?.Send(message);
 	}
-
 
 	public void Update()
 	{
-		_connector.MainThreadAction();
+		_netClient?.Update();
 	}
 
-	public bool IsConnected() => _connector.IsConnect();
+	public bool IsConnected() => _netClient?.State == ClientState.Connected;
 
-
-	public async Task<TResponse> RequestAsync<TResponse>(ushort serviceId, IMessage request, long stageId = 0)
-		where TResponse : IMessage, new()
+	public async Task<TResponse> RequestAsync<TResponse>(IMessage request)
+		where TResponse : IMessage
 	{
- 
-		return await _connector.RequestAsync<TResponse>(serviceId, request, stageId);
-	}
+		if (_netClient == null)
+			throw new InvalidOperationException("NetClient is not initialized. Call ConnectAsync first.");
 
-	public async Task<IMessage> RequestAsync(ushort serviceId, IMessage request, long stageId = 0)
-	{
-		return await _connector.RequestAsync(serviceId, request, stageId);
+		return await _netClient.RequestAsync<TResponse>(request);
 	}
 
 
 	public async Task<bool> LoginAsync(string platformUid, EAccountPlatform platform, string token, ERegionCode regionCode)
 	{
-		int retryCount = 0;
-		const int maxRetries = 10;
-		const int retryIntervalMilliseconds = 1000; // 3초 간격
+		if (_netClient == null)
+			throw new InvalidOperationException("NetClient is not initialized. Call ConnectAsync first.");
 
-		while (true)
-		{
-			var accessQueueStatusCheckRes = await _connector.RequestAsync<Session_AccessQueueStatusCheckRes>(0,
-				new Session_AccessQueueStatusCheckReq
-				{
-					PlatformUid = platformUid,
-					RegionCode = regionCode,
-				}
-			);
-
-
-			if (accessQueueStatusCheckRes.Result == EAccessQueueStatusResult.Ok)
-			{
-				_clientEvent.PrintLog($"accessQueueStatusCheck complete - [uuid:{platformUid}]");
-				break;
-			}
-
-
-			retryCount++;
-
-			if (retryCount >= maxRetries)
-			{
-				_clientEvent.PrintLog($"accessQueueStatusCheck Fail after {retryCount} retries - [uuid:{platformUid}]");
-				return false;
-			}
-
-			_clientEvent.PrintLog( $"accessQueueStatusCheck not ready. Retrying {retryCount}/{maxRetries} - [uuid:{platformUid}]");
-			await Task.Delay(retryIntervalMilliseconds);
-		}
-
-
-		var authenticateRes = await _connector.AuthenticateAsync<Account_AuthenticateRes>(1, (
-			new Account_AuthenticateReq
-			{
-				//  Version = 1.0f,
-				PlatformUid = platformUid,
-				Token = string.Empty,
-				PlatformCode = platform,
-				AppMarket = EAppMarket.Google,
-				OsType = EPlatform.Editor,
-				Lang = "ko",
-				Country = "KR", 
-				RegionCode = regionCode,
-			}
-		));
-
-
-		if (authenticateRes.Result != EAuthenticateResult.Ok)
-		{
-			_clientEvent.PrintLog( $"authenticate Fail - [uuid:{platformUid} Reason :{authenticateRes.Result}");
-			return false;
-		}
-
-		_clientEvent.PrintLog($"authenticate complete - [uuid:{platformUid},accountId:{authenticateRes.AccountId}]");
-		var playerData = await _connector.RequestAsync<Player_DataRes>(1, new Player_DataReq());
-
-		_clientEvent.SetUserInfo(new { UID = playerData.PlayerData.Player.AccountId, NickName = playerData.PlayerData.Player.Nickname });
 		return true;
 	}
 
-	public void Disconnect() => _connector.Disconnect();
+	public void Disconnect() => _netClient?.DisconnectClient();
 }

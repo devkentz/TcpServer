@@ -3,11 +3,11 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Threading;
-using Microsoft.IdentityModel.Tokens;
 using TestClient.Proto;
 using Newtonsoft.Json;
 using Proto;
 using System.Windows.Media.Animation;
+using Microsoft.Extensions.Logging;
 
 namespace TestClient
 {
@@ -19,8 +19,8 @@ namespace TestClient
 		private readonly DispatcherTimer _networkUpdateTimer = new();
 		private readonly Proto.TestClient _client;
 		private const int MaxLogLine = 50000;
-        private readonly DispatcherTimer repeatTimer = new();
-		private int remainingCount = 0;
+        private readonly DispatcherTimer _repeatTimer = new();
+		private int _remainingCount = 0;
 
         public ObservableCollection<PacketConvertor> Items { get; }
 
@@ -28,7 +28,10 @@ namespace TestClient
 		{
 			InitializeComponent();
 
-			_client = new Proto.TestClient(this);
+			var loggerFactory = LoggerFactory.Create(builder => { builder.AddConsole(); });
+			var logger = loggerFactory.CreateLogger<Proto.TestClient>();
+			
+			_client = new Proto.TestClient(this, logger);
 
 			ProtoLoaderManager.Instance.LoadAllProtos();
 			Items = new ObservableCollection<PacketConvertor>(ProtoLoaderManager.Instance.GetSendPackets());
@@ -158,7 +161,7 @@ namespace TestClient
 
 		private async void Button_Click(object sender, RoutedEventArgs e)
 		{
-			if (PlatformUidTextBox.Text is { } text && false == text.IsNullOrEmpty())
+			if (PlatformUidTextBox.Text is { } text && false == string.IsNullOrEmpty(text))
 			{
 				try
 				{
@@ -180,10 +183,7 @@ namespace TestClient
 				if (PacketListBox.SelectedItem is PacketConvertor packetConvertor)
 				{
 					var textRange = new TextRange(PacketEditTextBox.Document.ContentStart, PacketEditTextBox.Document.ContentEnd);
-					var res = await _client.RequestAsync(1, packetConvertor.ToPacket(textRange.Text));
-
-					if (res.Descriptor.Name != Player_DataRes.Descriptor.Name)
-						PrintLog($"{res.Descriptor.Name}{Environment.NewLine}{JsonConvert.SerializeObject(res, Formatting.Indented)}");
+					_client.Send(packetConvertor.ToPacket(textRange.Text));
 				}
 			}
 			catch (Exception exception)
@@ -194,7 +194,7 @@ namespace TestClient
 
         private async void RepeatSend_Click(object sender, RoutedEventArgs e)
         {
-            if (remainingCount > 0)
+            if (_remainingCount > 0)
             {
                 // 이미 반복 전송 중일 때
                 MessageBox.Show("이미 반복 전송 중입니다!");
@@ -229,36 +229,27 @@ namespace TestClient
                 return;
             }
 
-            repeatTimer.Stop();
+            _repeatTimer.Stop();
 
-            remainingCount = repeatCount;
-            repeatTimer.Interval = TimeSpan.FromMicroseconds(intervalMs);
-            repeatTimer.Tick += async (_, _) =>
+            _remainingCount = repeatCount;
+            _repeatTimer.Interval = TimeSpan.FromMicroseconds(intervalMs);
+            _repeatTimer.Tick += async (_, _) =>
             {
                 Send_Click(sender, e);
 
-                remainingCount--;
+                _remainingCount--;
                 
-                if (remainingCount <= 0)
+                if (_remainingCount <= 0)
                 {
-                    repeatTimer.Stop();
+                    _repeatTimer.Stop();
                     await ShowToast("반복 전송 완료!");
                 }
             };
 
-            repeatTimer.Start();
+            _repeatTimer.Start();
         }
 
-
-        private async void CheatSend(object sender, RoutedEventArgs e)
-		{
-			if (!_client.IsConnected() || CheatTextbox.Text.IsNullOrEmpty())
-				return;
-
-			var res = await _client.RequestAsync<Cheat_Res>(1, new Cheat_Req { Params = CheatTextbox.Text });
-			PrintLog(JsonConvert.SerializeObject(res, Formatting.Indented));
-		}
-
+ 
 		private void ClearLog_Click(object sender, RoutedEventArgs e)
 		{
 			LogTextBox.Document.Blocks.Clear();

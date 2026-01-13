@@ -80,15 +80,6 @@
                              HorizontalAlignment="Stretch"/>
             </GroupBox>
 
-            <!-- 치트 코드 -->
-            <GroupBox Header="🎮 치트 코드" Margin="5" Grid.Row="3">
-                <StackPanel Orientation="Horizontal">
-                    <TextBox x:Name="CheatTextbox" Width="250" Margin="5"/>
-                    <Button Content="⚡ 적용" Click="CheatSend"
-                            Width="80" Height="35" Margin="5"/>
-                </StackPanel>
-            </GroupBox>
-
             <!-- 전송 버튼 + 반복 전송 -->
             <Grid Margin="10" HorizontalAlignment="Center" Grid.Row="4">
                 <Grid.RowDefinitions>

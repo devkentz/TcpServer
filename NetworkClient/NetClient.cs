@@ -49,8 +49,8 @@ namespace NetworkClient
 
         private long Sid => Socket.Handle.ToInt64();
 
-        public NetClient(TimeProvider timeProvider, ILogger logger, MessageHandler handler)
-            : base("localhost", 0)
+        public NetClient(string address, int port, ILogger logger, MessageHandler handler)
+            : base(address, port)
         {
             _logger = logger;
             _packetParser = new ProtoPacketParser();
@@ -59,7 +59,7 @@ namespace NetworkClient
             OptionKeepAlive = true;
             OptionSendBufferSize = 1024 * 64;
             OptionReceiveBufferSize = 1024 * 256;
-            
+
             _handler = handler;
         }
 

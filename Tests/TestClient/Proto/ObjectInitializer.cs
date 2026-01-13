@@ -1,116 +1,169 @@
 ﻿using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Google.Protobuf.Collections;
 
 namespace TestClient.Proto;
-
 public static class ObjectInitializer
 {
-	public static void EnsureNonNullFields(object obj)
-	{
-		Type type = obj.GetType();
+    public static void EnsureNonNullFields(object obj, bool addDefaultElements = false)
+    {
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        EnsureNonNullFieldsInternal(obj, visited, addDefaultElements);
+    }
 
-		foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-		{
-			//if (!property.CanWrite) continue; // Read-Only 프로퍼티 제외
+    private static void EnsureNonNullFieldsInternal(
+        object obj, 
+        HashSet<object> visited,
+        bool addDefaultElements)
+    {
+        if (!visited.Add(obj))
+            return;
 
-			object value = property.GetValue(obj);
-			Type propertyType = property.PropertyType;
+        Type type = obj.GetType();
 
+        foreach (var property in type.GetProperties(
+            BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (!property.CanWrite) 
+                continue; // ✅ Read-only 제외
 
-			if (value == null)
-			{
-				if (propertyType.IsClass && propertyType != typeof(string))
-				{
-					// 일반 클래스(내부 객체) 처리
-					object newInstance = Activator.CreateInstance(propertyType);
-					property.SetValue(obj, newInstance);
+            object? value = property.GetValue(obj);
+            Type propertyType = property.PropertyType;
 
-					// 내부 객체도 재귀적으로 `null` 필드 처리
-					EnsureNonNullFields(newInstance);
-				}
-				// Protobuf의 `RepeatedField<T>` 처리
-				else if (propertyType.IsGenericType && propertyType.GetGenericTypeDefinition() == typeof(RepeatedField<>))
-				{
-					Type itemType = propertyType.GetGenericArguments()[0];
-					object newRepeatedField = Activator.CreateInstance(propertyType);
-					property.SetValue(obj, newRepeatedField);
+            if (value == null)
+            {
+                HandleNullProperty(obj, property, propertyType, visited, addDefaultElements);
+            }
+            else
+            {
+                HandleNonNullProperty(value, propertyType, visited, addDefaultElements);
+            }
+        }
+    }
 
-					// ✅ 비어있는 경우 기본 요소 1개 추가
-					AddDefaultElement(newRepeatedField, itemType);
-				}
-				// 일반 C#의 `List<T>` 처리
-				else if (propertyType.IsGenericType && propertyType.GetGenericTypeDefinition() == typeof(List<>))
-				{
-					Type itemType = propertyType.GetGenericArguments()[0];
-					object newList = Activator.CreateInstance(propertyType);
-					property.SetValue(obj, newList);
+    private static void HandleNullProperty(
+        object obj,
+        PropertyInfo property,
+        Type propertyType,
+        HashSet<object> visited,
+        bool addDefaultElements)
+    {
+        // RepeatedField<T>
+        if (IsRepeatedField(propertyType, out Type? itemType))
+        {
+            var instance = Activator.CreateInstance(propertyType)!;
+            property.SetValue(obj, instance);
+            
+            if (addDefaultElements)
+                AddDefaultElement(instance, itemType);
+        }
+        // List<T>
+        else if (IsList(propertyType, out itemType))
+        {
+            var instance = Activator.CreateInstance(propertyType)!;
+            property.SetValue(obj, instance);
+            
+            if (addDefaultElements)
+                AddDefaultElement(instance, itemType);
+        }
+        // MapField<K, V>
+        else if (IsMapField(propertyType))
+        {
+            var instance = Activator.CreateInstance(propertyType)!;
+            property.SetValue(obj, instance);
+        }
+        // 일반 클래스/구조체
+        else if (IsComplexType(propertyType))
+        {
+            var instance = Activator.CreateInstance(propertyType)!;
+            property.SetValue(obj, instance);
+            EnsureNonNullFieldsInternal(instance, visited, addDefaultElements);
+        }
+    }
 
-					// ✅ 비어있는 경우 기본 요소 1개 추가
-					AddDefaultElement(newList, itemType);
-				}
-				// Protobuf의 `MapField<K, V>` 처리
-				else if (propertyType.IsGenericType && propertyType.GetGenericTypeDefinition() == typeof(MapField<,>))
-				{
-					object newMapField = Activator.CreateInstance(propertyType);
-					property.SetValue(obj, newMapField);
-				}
-			}
-			else
-			{
-				// ✅ 컬렉션이 비어있다면 기본 요소 추가
-				if (value is IList list)
-				{
-					Type itemType = propertyType.GetGenericArguments()[0];
-					if (list.Count == 0)
-					{
-						AddDefaultElement(list, itemType);
-					}
-				}
-				else if (value is IDictionary dictionary)
-				{
-					// Dictionary는 기본 요소 추가 X (Key를 알 수 없으므로)
-				}
-				else if (value is IEnumerable enumerable && propertyType.IsGenericType &&
-				         propertyType.GetGenericTypeDefinition() == typeof(RepeatedField<>))
-				{
-					Type itemType = propertyType.GetGenericArguments()[0];
-					dynamic repeatedField = value;
-					if (repeatedField.Count == 0)
-					{
-						AddDefaultElement(repeatedField, itemType);
-					}
-				}
-				else if(value is string)
-				{
-					continue;
-				}
-				else
-				{
-					EnsureNonNullFields(value);
-				}
-			}
-		}
-	}
+    private static void HandleNonNullProperty(
+        object value,
+        Type propertyType,
+        HashSet<object> visited,
+        bool addDefaultElements)
+    {
+        if (value is string) return;
 
-	private static void AddDefaultElement(object collection, Type itemType)
-	{
-		if (collection is IList list)
-		{
-			list.Add(GetDefaultValue(itemType));
-		}
-		else if (collection is IEnumerable && collection.GetType().GetGenericTypeDefinition() == typeof(RepeatedField<>))
-		{
-			dynamic repeatedField = collection;
-			repeatedField.Add(GetDefaultValue(itemType));
-		}
-	}
+        if (value is IList list && addDefaultElements)
+        {
+            if (list.Count == 0 && propertyType.IsGenericType)
+            {
+                Type itemType = propertyType.GetGenericArguments()[0];
+                AddDefaultElement(list, itemType);
+            }
+        }
+        else if (IsComplexType(propertyType))
+        {
+            EnsureNonNullFieldsInternal(value, visited, addDefaultElements);
+        }
+    }
 
-	private static object GetDefaultValue(Type type)
-	{
-		if (type == typeof(string))
-			return string.Empty;
+    private static bool IsRepeatedField(Type type, [NotNullWhen(true)]out Type? itemType)
+    {
+        itemType = null;
+        if (!type.IsGenericType) return false;
+        
+        if (type.GetGenericTypeDefinition() == typeof(RepeatedField<>))
+        {
+            itemType = type.GetGenericArguments()[0];
+            return true;
+        }
+        return false;
+    }
 
-		return Activator.CreateInstance(type)!;
-	}
+    private static bool IsList(Type type, [NotNullWhen(true)]out Type? itemType)
+    {
+        itemType = null;
+        if (!type.IsGenericType) return false;
+        
+        if (type.GetGenericTypeDefinition() == typeof(List<>))
+        {
+            itemType = type.GetGenericArguments()[0];
+            return true;
+        }
+        return false;
+    }
+
+    private static bool IsMapField(Type type)
+    {
+        return type.IsGenericType && 
+               type.GetGenericTypeDefinition() == typeof(MapField<,>);
+    }
+
+    private static bool IsComplexType(Type type)
+    {
+        return !type.IsPrimitive && 
+               !type.IsEnum && 
+               type != typeof(string) &&
+               type != typeof(decimal) &&
+               type != typeof(DateTime);
+    }
+
+    private static void AddDefaultElement(object collection, Type itemType)
+    {
+        if (collection is IList list)
+        {
+            list.Add(GetDefaultValue(itemType));
+        }
+        else
+        {
+            // RepeatedField<T>.Add via reflection
+            var addMethod = collection.GetType().GetMethod("Add");
+            addMethod?.Invoke(collection, [GetDefaultValue(itemType)]);
+        }
+    }
+
+    private static object GetDefaultValue(Type type)
+    {
+        if (type == typeof(string))
+            return string.Empty;
+
+        return Activator.CreateInstance(type)!;
+    }
 }

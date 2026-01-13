@@ -19,6 +19,9 @@ public class PacketConvertor
 		}
 
 		var instance = Activator.CreateInstance(Type);  // Type에서 객체 인스턴스를 생성합니다.
+		if(instance == null)
+			return default;
+		
 		ObjectInitializer.EnsureNonNullFields(instance);
 
 		JsonText = JsonConvert.SerializeObject(instance, Formatting.Indented);
