@@ -74,7 +74,7 @@ public class Program
                 services.AddHostedService<FrontServer>();
 
                 // Redis 연결 (InGameConnectionQueue용) - appsettings.json에서 읽기
-                var redisConnectionString = configuration["Redis:InGameConnectionQueue:ConnectionString"] ?? "localhost:6379";
+                var redisConnectionString = configuration.GetValue<string>("Redis:InGameConnectionQueue:ConnectionString", "localhost:6379");
                 var redisConnectTimeout = configuration.GetValue<int>("Redis:InGameConnectionQueue:ConnectTimeout", 5000);
                 var redisSyncTimeout = configuration.GetValue<int>("Redis:InGameConnectionQueue:SyncTimeout", 5000);
                 var redisAbortOnConnectFail = configuration.GetValue<bool>("Redis:InGameConnectionQueue:AbortOnConnectFail", false);
