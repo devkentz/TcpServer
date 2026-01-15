@@ -13,7 +13,7 @@ public class TestClientMessageHandler : MessageHandler
 		// 필요시 특정 메시지 타입별 핸들러 추가 가능
 	}
 
-	public new void Handling(NetworkPacket packet)
+	public override void Handling(NetworkPacket packet)
 	{
 		OnMessageReceived?.Invoke(packet.Message);
 	}

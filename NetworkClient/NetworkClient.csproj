@@ -13,15 +13,9 @@
 		<PackageReference Include="System.Text.Json" />
 		<PackageReference Include="System.Text.RegularExpressions" />
         <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" />
+        <PackageReference Include="NetCoreServer" />
     </ItemGroup>
-
-
-	<ItemGroup>
-		<Reference Include="NetCoreServer">
-			<HintPath>lib\NetCoreServer.dll</HintPath>
-		</Reference>
-	</ItemGroup>
-
+    
 
 	<ItemGroup>
 	  <ProjectReference Include="..\NetworkServer.Common\NetworkServer.Common.csproj" />

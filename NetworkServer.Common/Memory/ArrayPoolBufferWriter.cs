@@ -48,7 +48,7 @@ public class ArrayPoolBufferWriter : IBufferWriter<byte>, IDisposable
     }
 
 
-    private ReadOnlySpan<byte> GetReadSpan(int size)
+    public ReadOnlySpan<byte> GetReadSpan(int size)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(size);
 

@@ -34,7 +34,7 @@ namespace NetworkClient
 
         private readonly MessageHandler _handler;
 
-        private TaskCompletionSource<bool>? _taskOnConnector;
+        private TaskCompletionSource<bool>? _connectTcs;
         private TaskCompletionSource<IMessage>? _requestTcs = null;
 
         private readonly int _timeoutMs = 15_000_000;
@@ -56,27 +56,25 @@ namespace NetworkClient
 
             OptionNoDelay = true;
             OptionKeepAlive = true;
-            OptionSendBufferSize = 1024 * 64;
-            OptionReceiveBufferSize = 1024 * 256;
-            
-            
-            
+            // OptionSendBufferSize = 1024 * 64;
+            // OptionReceiveBufferSize = 1024 * 256;
+
             _handler = handler;
         }
 
         public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default, int timeoutMs = 15_000)
         {
-            _taskOnConnector = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
+            _connectTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            
             using var timeoutCts = new CancellationTokenSource(timeoutMs);
 
             try
             {
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-                Connect();
+                base.ConnectAsync();
 
-                return await _taskOnConnector.Task
+                return await _connectTcs.Task
                     .WaitAsync(linkedCts.Token)
                     .ConfigureAwait(false);
             }
@@ -94,6 +92,10 @@ namespace NetworkClient
             {
                 _logger.LogError(ex, "Connection failed");
                 throw;
+            }
+            finally
+            {
+                _connectTcs = null;
             }
         }
 
@@ -193,24 +195,23 @@ namespace NetworkClient
 
             (header, message).WriteToSpan(buffer);
             //_sendQueue.Enqueue((buffer, size));
-            
-            base.Send(buffer, 0, size);
-            
-            ArrayPool<byte>.Shared.Return(buffer);
+
+            base.SendAsync(buffer, 0, size);
         }
 
         protected override void OnConnected()
         {
             _logger.LogInformation("client connected - [sid:{Sid}]", Sid);
 
-            _taskOnConnector?.SetResult(true);
+            _connectTcs?.SetResult(true);
             OnConnect?.Invoke(true);
         }
 
         protected override void OnDisconnected()
         {
             _logger.LogInformation("TCP client disconnected - [sid:{Sid}]", Sid);
-            _taskOnConnector = null;
+
+            _connectTcs?.SetCanceled();
         }
 
         protected override void OnReceived(byte[] buffer, long offset, long size)
@@ -224,10 +225,10 @@ namespace NetworkClient
 
                 foreach (var packet in packets)
                 {
-                    if (_requestTcs != null && packet.Header.MsgSeq == _msgSeq + 1)
+                    if (_requestTcs != null && packet.Header.MsgSeq > 0)
                     {
                         _msgSeq = packet.Header.MsgSeq;
-                        _requestTcs?.SetResult(packet.Message);
+                        _requestTcs?.TrySetResult(packet.Message);
                         continue;
                     }
 
@@ -246,7 +247,8 @@ namespace NetworkClient
             base.Dispose();
             _receiveBuffer.Dispose();
 
-            _requestTcs?.SetCanceled();
+            _connectTcs?.TrySetCanceled();
+            _requestTcs?.TrySetCanceled();
             _requestTcs = null;
         }
     }

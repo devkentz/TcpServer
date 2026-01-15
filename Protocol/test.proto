@@ -74,7 +74,7 @@ message LoginGameReq
 
 message LoginGameRes
 {
-  
+  bool Success = 1;
 }
 
 

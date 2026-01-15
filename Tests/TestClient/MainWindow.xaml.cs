@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -84,7 +85,7 @@ namespace TestClient
 			}
 			catch (Exception ex)
 			{
-				PrintLog(ex.Message);
+				PrintLog(ex.ToString());
 			}
 			finally
 			{
@@ -117,6 +118,12 @@ namespace TestClient
 
 		public void PrintLog(string message)
 		{
+			if (!Dispatcher.CheckAccess())
+			{
+				Dispatcher.BeginInvoke(() => PrintLog(message));
+				return;
+			}
+			
 			LogTextBox.Document.Blocks.Add(new Paragraph(new Run(message)));  // 새로운 텍스트 추가
 			LogTextBox.ScrollToEnd();
 
@@ -183,10 +190,16 @@ namespace TestClient
 			{
 				if (PacketListBox.SelectedItem is PacketConvertor packetConvertor)
 				{
-					var textRange = new TextRange(PacketEditTextBox.Document.ContentStart, PacketEditTextBox.Document.ContentEnd);
-					var response = await _client.RequestAsync(packetConvertor.ToPacket(textRange.Text));
+					Stopwatch watch = new Stopwatch();
 					
-					PrintLog(response.ToString()!);
+					var textRange = new TextRange(PacketEditTextBox.Document.ContentStart, PacketEditTextBox.Document.ContentEnd);
+					watch.Start();
+					var response = await _client.RequestAsync(packetConvertor.ToPacket(textRange.Text));
+					watch.Stop();
+					
+					
+					PrintLog($"elapsedTime : {watch.ElapsedMilliseconds}");
+					PrintLog($"Message: {response}");
 				}
 			}
 			catch (Exception exception)
@@ -195,7 +208,7 @@ namespace TestClient
 			}
 		}
 
-        private async void RepeatSend_Click(object sender, RoutedEventArgs e)
+        private void RepeatSend_Click(object sender, RoutedEventArgs e)
         {
             if (_remainingCount > 0)
             {

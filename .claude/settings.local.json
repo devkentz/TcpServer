@@ -7,7 +7,8 @@
       "Bash(git push)",
       "Bash(dotnet build:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "mcp__context7__resolve-library-id"
     ]
   }
 }

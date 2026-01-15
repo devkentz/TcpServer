@@ -4,10 +4,10 @@ using System.Net.Sockets;
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
 using NetCoreServer;
-using Network.Server.Common;
 using Network.Server.Common.Memory;
 using Network.Server.Common.Packets;
 using Network.Server.Front.Actor;
+using Newtonsoft.Json.Serialization;
 
 namespace Network.Server.Front.Core;
 
@@ -20,6 +20,8 @@ public class NetworkSession(
     ILogger<NetworkSession> logger)
     : TcpSession(clientSocketServer)
 {
+    public ushort SequenceId { get; set; } = 0;
+    
     private readonly ArrayPoolBufferWriter _buffer = new();
     private readonly ProtoPacketParser _packetParser = new();
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Create();
@@ -59,6 +61,7 @@ public class NetworkSession(
         logger.LogDebug($"Session  OnDisConnected - [sid:{SessionId}]");
         Disconnected?.Invoke(this, EventArgs.Empty);
     }
+ 
 
     protected override void OnReceived(byte[] buffer, long offset, long size)
     {
@@ -80,7 +83,6 @@ public class NetworkSession(
     protected override void OnError(SocketError error)
     {
         logger.LogError($"socket caught an error - [codeCode:{error}]");
-        Disconnect();
     }
 
     public void SendToClient(Header header, IMessage message)
@@ -88,7 +90,7 @@ public class NetworkSession(
         int size = (header, message).CalcSize();
         if (size > 4096)
         {
-            var heapBuffer = _arrayPool.Rent(size);
+            var heapBuffer =  _arrayPool.Rent(size);
             try
             {
                 var span = heapBuffer.AsSpan(0, size);

@@ -5,27 +5,33 @@ namespace Network.Server.Front.Actor;
 
 public interface IActorManager
 {
-    public IActor? FindActor(long actorId);
-    void AddActor(IActor actor);
+    public IActor? GetActor(long actorId);
     void RemoveActor(long actorId);
+    IActor? FirstOrDefault(Func<IActor, bool> predicate);
+    bool TryAddActor(IActor userActor);
 }
 
 public class ActorManager : IActorManager
 {
     private readonly ConcurrentDictionary<long, IActor> _actorsById = new();
 
-    public IActor? FindActor(long actorId)
+    public IActor? GetActor(long actorId)
     {
         return _actorsById.GetValueOrDefault(actorId);
-    }
-
-    public void AddActor(IActor actor)
-    {
-        _actorsById.TryAdd(actor.ActorId, actor);
     }
 
     public void RemoveActor(long actorId)
     {
         _actorsById.TryRemove(actorId, out _);
+    }
+
+    public IActor? FirstOrDefault(Func<IActor, bool> predicate)
+    {
+        return _actorsById.Values.FirstOrDefault(predicate);
+    }
+
+    public bool TryAddActor(IActor actor)
+    {
+        return _actorsById.TryAdd(actor.ActorId, actor);
     }
 }

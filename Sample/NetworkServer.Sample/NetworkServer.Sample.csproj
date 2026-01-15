@@ -25,7 +25,9 @@
         <ProjectReference Include="..\..\NetworkServer.Common\NetworkServer.Common.csproj" />
         <ProjectReference Include="..\..\NetworkServer.ProtoGenerator\NetworkServer.ProtoGenerator.csproj" />
         <ProjectReference Include="..\..\Protocol\Protocol.csproj" />
-        <ProjectReference Include="..\..\Tests\NetworkEngine.Tests.Front\NetworkEngine.Tests.Front.csproj" />
+        <ProjectReference Include="..\..\PacketParserGenerator\PacketParserGenerator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
     </ItemGroup>
 
     <ItemGroup>

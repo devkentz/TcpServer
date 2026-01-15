@@ -7,7 +7,6 @@ using Network.Server.Front.Actor;
 using Network.Server.Front.Config;
 using Network.Server.Front.Core;
 using Network.Server.Generated;
-using NetworkEngine.Tests.Node;
 using NetworkServer.ProtoAutoGen;
 using NetworkServer.ProtoGenerator;
 using NetworkServer.Sample.Controllers;
@@ -47,6 +46,8 @@ public class Program
             var host = CreateHostBuilder(args).Build();
 
             await host.RunAsync();
+            
+            Log.Information("NetworkServer Sample 종료");
         }
         catch (Exception ex)
         {
@@ -103,7 +104,7 @@ public class Program
 
                 // 샘플 컨트롤러 등록
                 services.AddSingleton<SampleController>();
-
+                
                 // FrontServer 설정 - appsettings.json에서 읽기
                 services.Configure<FrontServerConfig>(configuration.GetSection("FrontServerConfig"));
             });

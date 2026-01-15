@@ -11,8 +11,9 @@ public class Actor : IActor, IDisposable
     private readonly MessageHandler _handler;
     private readonly NetworkSession _session;
 
-    public ushort SequenceId { get; private set; } = 0;
     public long ActorId { get; }
+    
+    public NetworkSession Session => _session;
 
     public Actor(ILogger logger, NetworkSession session, long actorId, IServiceProvider rootProvider)
     {
@@ -28,7 +29,7 @@ public class Actor : IActor, IDisposable
     {
         await using var scope = _rootProvider.CreateAsyncScope();
         var response = await _handler.Handling(scope.ServiceProvider, this, actorMessage);
-        response.Header.MsgSeq = SequenceId++;
+        response.Header.MsgSeq = _session.SequenceId;
         _session.SendToClient(response.Header, response.Message);
     }
 

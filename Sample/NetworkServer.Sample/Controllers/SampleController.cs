@@ -26,20 +26,4 @@ public class SampleController(ILogger<SampleController> logger)
             Timestamp = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         }));
     }
-
-    /// <summary>
-    /// 클라이언트 연결 시 호출되는 핸들러 (예시)
-    /// </summary>
-    public void OnClientConnected(IActor actor)
-    {
-        logger.LogInformation("클라이언트 연결됨: Actor ID = {ActorId}", actor.ActorId);
-    }
-
-    /// <summary>
-    /// 클라이언트 연결 해제 시 호출되는 핸들러 (예시)
-    /// </summary>
-    public void OnClientDisconnected(IActor actor)
-    {
-        logger.LogInformation("클라이언트 연결 해제됨: Actor ID = {ActorId}", actor.ActorId);
-    }
 }

@@ -23,7 +23,7 @@ public class MessageHandler
         };
     }
 
-    public void Handling(NetworkPacket packet)
+    public virtual void Handling(NetworkPacket packet)
     {
         if (_handlers.TryGetValue(packet.Header.MsgId, out var handler))
         {

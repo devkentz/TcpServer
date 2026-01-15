@@ -5,6 +5,7 @@ using NetworkClient;
 using NetworkClient.Config;
 using NetworkServer.ProtoAutoGen;
 using Proto;
+using Proto.Test;
 
 namespace TestClient.Proto;
 
@@ -44,7 +45,7 @@ public class TestClient
 	{
 		// 기존 연결이 있으면 정리
 		_netClient?.Dispose();
-
+		
 		// NetClient 생성
 		_netClient = new NetClient(ip, port, _logger, _messageHandler);
 		_netClient.OnConnect += OnConnect;

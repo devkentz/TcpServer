@@ -68,7 +68,7 @@ namespace NetworkClient.Network
                 else
                 {
                     var payloadSize = totalSize - header.GetSize();
-                    message = parser.ParseFrom(span.Slice(0, payloadSize));
+                    message = parser.ParseFrom(buffer.GetReadSpan(payloadSize));
                     buffer.ReadAdvance(payloadSize);
                 }
 

@@ -39,7 +39,7 @@ namespace Network.Server.Front.Core
                     throw new Exception($"Unknown packet ID: {header.MsgId}");
 
                 var payloadSize = totalSize - header.GetSize();
-                var message = parser.ParseFrom(span.Slice(0, payloadSize));
+                var message = parser.ParseFrom(buffer.GetReadSpan(payloadSize));
                 buffer.ReadAdvance(payloadSize);
 
                 if (message == null)

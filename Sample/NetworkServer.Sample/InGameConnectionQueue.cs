@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Network.Server.Common.DistributeLock;
 using Network.Server.Common.Packets;
@@ -8,15 +10,14 @@ using Network.Server.Front.Core;
 using Proto.Test;
 using StackExchange.Redis;
 
-namespace NetworkEngine.Tests.Node;
+namespace NetworkServer.Sample;
 
 /// <summary>
 /// InGameConnection 요청을 큐로 처리하는 서비스
 /// </summary>
 public class UserActor : Actor
 {
-    public readonly string ExternalId;
-
+    public string ExternalId { get; }
     public UserActor(ILogger logger, NetworkSession session, long actorId, string externalId, IServiceProvider rootProvider)
         : base(logger, session, actorId, rootProvider)
     {
@@ -77,8 +78,7 @@ public class InGameConnectionQueue : IInGameConnectionQueue, IDisposable
 
             var req = (LoginGameReq) message.Message;
 
-            var database = _database.GetDatabase();
-
+            var  database = _database.GetDatabase();
             //같은 유저에 대한, 로그인 처리가 중복으로 일어나지 않게 하기 위한, 레디스를 이용한 분산락
             await using var lockObj = await database.TryAcquireLockAsync(req.ExternalId);
             if (lockObj == null)
@@ -90,20 +90,21 @@ public class InGameConnectionQueue : IInGameConnectionQueue, IDisposable
             _logger.LogInformation("Processing connection request for session {SessionId}", session.SessionId);
 
 
-            var userActor = new UserActor(_logger, session, _uniqueIdGenerator.NextId(), req.ExternalId, _serviceProvider);
-
-            if (_actorManager.FirstOrDefault(e => (((UserActor)e).ExternalId == req.ExternalId)) is UserActor existingActor)
+            if (_actorManager.FirstOrDefault(e => ((UserActor) e).ExternalId == req.ExternalId) is UserActor existingActor)
             {
-                _actorManager.RemoveActor(existingActor.ActorId);
                 existingActor.Session.Disconnect();
+                _actorManager.RemoveActor(existingActor.ActorId);
             }
-            
 
+            var userActor = new UserActor(_logger, session, _uniqueIdGenerator.NextId(), req.ExternalId, _serviceProvider);
+            _actorManager.TryAddActor(userActor);
+            
+            
             session.SendToClient(new Header(msgId: LoginGameRes.MsgId, msgSeq: session.SequenceId++), new LoginGameRes {Success = true});
         }
         catch (OperationCanceledException e)
         {
-            _logger.LogInformation(e, "canceled request : {e}", e);
+            _logger.LogInformation(e, "Processing connection request for session {SessionId}", session.SessionId);
         }
         catch (Exception e)
         {
