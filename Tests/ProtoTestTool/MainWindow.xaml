@@ -1,0 +1,181 @@
+<Window x:Class="ProtoTestTool.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:roslyn="clr-namespace:RoslynPad.Editor;assembly=RoslynPad.Editor.Windows"
+        mc:Ignorable="d"
+        Title="ProtoTestTool - Scriptable Packet Tester" Height="800" Width="1200">
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Background" Value="#DDDDDD"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style TargetType="TabItem">
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style TargetType="GroupBox">
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Padding" Value="5"/>
+            <Setter Property="BorderBrush" Value="#FFAAAAAA"/>
+        </Style>
+    </Window.Resources>
+    
+    <Grid Margin="10">
+        <TabControl>
+            <!-- TAB 1: Connection -->
+            <TabItem Header="서버 연결 (Connection)">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/> <!-- Connection Settings -->
+                        <RowDefinition Height="*"/>    <!-- Logs -->
+                    </Grid.RowDefinitions>
+
+                    <GroupBox Header="연결 설정 (Server Info)" Grid.Row="0" Margin="0,0,0,10">
+                        <Grid Margin="5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="IP:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <TextBox x:Name="IpBox" Text="127.0.0.1" VerticalContentAlignment="Center" Margin="0,0,10,0" Grid.Column="1"/>
+                            
+                            <TextBlock Text="Port:" VerticalAlignment="Center" Margin="0,0,5,0" Grid.Column="2"/>
+                            <TextBox x:Name="PortBox" Text="9000" VerticalContentAlignment="Center" Margin="0,0,10,0" Grid.Column="3"/>
+
+                            <StackPanel Orientation="Horizontal" Grid.Column="5">
+                                <Button x:Name="ConnectBtn" Content="연결 (Connect)" Padding="15,5" Margin="0,0,5,0" Click="ConnectBtn_Click"/>
+                                <Button x:Name="DisconnectBtn" Content="해제 (Disconnect)" Padding="15,5" IsEnabled="False" Click="DisconnectBtn_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </GroupBox>
+
+                    <GroupBox Header="시스템 로그 (System Logs)" Grid.Row="1">
+                        <RichTextBox x:Name="LogBox" IsReadOnly="True" VerticalScrollBarVisibility="Auto">
+                            <FlowDocument>
+                                <Paragraph>
+                                    <Run Text="도구가 초기화되었습니다..."/>
+                                </Paragraph>
+                            </FlowDocument>
+                        </RichTextBox>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <!-- TAB 2: Script Editor -->
+            <TabItem x:Name="ScriptEditorTab" Header="스크립트 편집 (Script Editor)" Selector.Selected="ScriptEditorTab_Selected">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Editor Area -->
+                    <Grid Grid.Column="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="5"/>
+                            <RowDefinition Height="150"/>
+                        </Grid.RowDefinitions>
+                        
+                        <StackPanel Orientation="Horizontal" Margin="5">
+                            <Button x:Name="CompileScriptBtn" Content="전체 컴파일 (Compile All)" Padding="10,5" Click="CompileScriptBtn_Click" Margin="0,0,10,0"/>
+                            <Button x:Name="ImportProtoBtn" Content="Proto 가져오기 (Import)" Padding="10,5" Click="ImportProtoBtn_Click" Margin="0,0,10,0"/>
+                            <TextBlock Text="인텔리센스 활성화됨 (RoslynPad)" VerticalAlignment="Center" Foreground="Gray"/>
+                        </StackPanel>
+
+                        <TabControl Grid.Row="1" x:Name="MethodTabs" TabStripPlacement="Left">
+                            <!-- 1. Packet Registry -->
+                            <TabItem Header="Packet Registry (패킷 등록)">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5" Background="Transparent">
+                                        <Button Content="불러오기 (Load Registry)" Click="LoadRegistryBtn_Click"/>
+                                        <Button Content="저장하기 (Save Registry)" Click="SaveRegistryBtn_Click"/>
+                                    </StackPanel>
+                                    <roslyn:RoslynCodeEditor Grid.Row="1" x:Name="RegistryEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True"/>
+                                </Grid>
+                            </TabItem>
+                            
+                            <!-- 2. Packet Serializer -->
+                            <TabItem Header="Packet Serializer (직렬화)">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5" Background="Transparent">
+                                        <Button Content="불러오기 (Load Serializer)" Click="LoadSerializerBtn_Click"/>
+                                        <Button Content="저장하기 (Save Serializer)" Click="SaveSerializerBtn_Click"/>
+                                    </StackPanel>
+                                    <roslyn:RoslynCodeEditor Grid.Row="1" x:Name="SerializerEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True"/>
+                                </Grid>
+                            </TabItem>
+                            
+                            <!-- 3. Script Context -->
+                            <TabItem Header="Script Context (핸들러)">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5" Background="Transparent">
+                                        <Button Content="불러오기 (Load Handler)" Click="LoadContextBtn_Click"/>
+                                        <Button Content="저장하기 (Save Handler)" Click="SaveContextBtn_Click"/>
+                                    </StackPanel>
+                                    <roslyn:RoslynCodeEditor Grid.Row="1" x:Name="ContextEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True"/>
+                                </Grid>
+                            </TabItem>
+                        </TabControl>
+
+                        <!-- Resizer -->
+                        <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Center" ResizeBehavior="PreviousAndNext" ShowsPreview="True" Background="#DDDDDD"/>
+
+                        <!-- Script Compilation Log -->
+                        <GroupBox Header="컴파일 로그 (Compilation Logs)" Grid.Row="3" Margin="5">
+                            <TextBox x:Name="ScriptLogBox" IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" TextWrapping="Wrap" />
+                        </GroupBox>
+                    </Grid>
+                </Grid>
+            </TabItem>
+            
+            <!-- TAB 3: Packet Tester -->
+            <TabItem Header="패킷 전송 (Packet Sender)">
+                <Grid Margin="5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="250"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Packet List -->
+                    <GroupBox Header="사용 가능 패킷 (Available Packets)" Grid.Column="0" Margin="0,0,5,0">
+                        <ListBox x:Name="PacketListBox" SelectionChanged="PacketListBox_SelectionChanged"/>
+                    </GroupBox>
+
+                    <!-- Packet Editor -->
+                    <GroupBox Header="패킷 내용 (JSON Payload)" Grid.Column="1">
+                        <Grid Margin="5">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBox x:Name="JsonEditor" AcceptsReturn="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto"/>
+                            
+                            <Button x:Name="SendBtn" Content="패킷 전송 (Send Packet)" Grid.Row="1" Margin="0,10,0,0" Height="40" Click="SendBtn_Click" IsEnabled="False"/>
+                        </Grid>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>

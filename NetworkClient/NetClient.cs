@@ -1,16 +1,17 @@
 ﻿using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
-using NetCoreServer;
 using Network.Server.Common.Memory;
 using Network.Server.Common.Packets;
 using NetworkClient.Config;
 using NetworkClient.Network;
 using NetworkServer.ProtoGenerator;
+using TcpClient = NetCoreServer.TcpClient;
 
 namespace NetworkClient
 {
@@ -210,10 +211,16 @@ namespace NetworkClient
         protected override void OnDisconnected()
         {
             _logger.LogInformation("TCP client disconnected - [sid:{Sid}]", Sid);
+            
 
             _connectTcs?.SetCanceled();
         }
 
+        protected override void OnError(SocketError error)
+        {
+            _logger.LogInformation("error - {error} [sid:{Sid}]", error, Sid);
+        }
+        
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
             try

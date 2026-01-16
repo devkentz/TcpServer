@@ -1,5 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -31,7 +32,7 @@ namespace TestClient
 
 			var loggerFactory = LoggerFactory.Create(builder => { builder.AddConsole(); });
 			var logger = loggerFactory.CreateLogger<Proto.TestClient>();
-			
+
 			_client = new Proto.TestClient(this, logger);
 
 			ProtoLoaderManager.Instance.LoadAllProtos();
@@ -47,25 +48,43 @@ namespace TestClient
 			_networkUpdateTimer.Interval = new TimeSpan(0, 0, 0, 0, 10);
 			_networkUpdateTimer.Tick += (o, e) => _client.Update();
 			_networkUpdateTimer.Start();
+
+			InitializeMonacoEditorAsync();
+		}
+
+		private async void InitializeMonacoEditorAsync()
+		{
+			await MonacoEditor.EnsureCoreWebView2Async(null);
+			var htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Monaco", "editor.html");
+			MonacoEditor.Source = new Uri(htmlPath);
+		}
+
+		private async Task SetMonacoCodeAsync(string code)
+		{
+			var jsonArg = JsonConvert.SerializeObject(code);
+			await MonacoEditor.ExecuteScriptAsync($"SetCode({jsonArg})");
+		}
+
+		private async Task<string> GetMonacoCodeAsync()
+		{
+			var jsonResult = await MonacoEditor.ExecuteScriptAsync("GetCode()");
+			return JsonConvert.DeserializeObject<string>(jsonResult) ?? "";
 		}
 
 		public void Terminate()
 		{
 			_networkUpdateTimer.Stop();
 		}
-        private async Task ShowToast(string message, int durationMs = 1000)
+        private Task ShowToast(string message, int durationMs = 1000)
         {
-            ToastLabel.Content = message;
+            ToastText.Text = message;
             ToastLabel.Visibility = Visibility.Visible;
-            ToastLabel.Opacity = 0.85; // 초기 투명도
+            ToastLabel.Opacity = 0.95;
 
-            // 스토리보드 가져오기
-            var sb = (Storyboard)this.Resources["ToastFadeOutStoryboard"];
-            sb.Completed += (s, e) =>
-            {
-                ToastLabel.Visibility = Visibility.Collapsed;
-            };
+            var sb = (Storyboard)Resources["ToastFadeOutStoryboard"];
+            sb.Completed += (_, _) => ToastLabel.Visibility = Visibility.Collapsed;
             sb.Begin();
+            return Task.CompletedTask;
         }
 
         private async void Connect_Click(object sender, RoutedEventArgs e)
@@ -156,14 +175,12 @@ namespace TestClient
 			UserInfoTextBox.Document.Blocks.Add(para);
 		}
 
-		private void ComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+		private async void ComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
 		{
 			if (e.AddedItems.Count > 0 && e.AddedItems[0] is PacketConvertor packet)
 			{
 				var (_, json) = packet.DefaultJsonString();
-
-				PacketEditTextBox.Document.Blocks.Clear();
-				PacketEditTextBox.Document.Blocks.Add(new Paragraph(new Run(json)));
+				await SetMonacoCodeAsync(json);
 			}
 		}
 
@@ -190,15 +207,14 @@ namespace TestClient
 			{
 				if (PacketListBox.SelectedItem is PacketConvertor packetConvertor)
 				{
-					Stopwatch watch = new Stopwatch();
-					
-					var textRange = new TextRange(PacketEditTextBox.Document.ContentStart, PacketEditTextBox.Document.ContentEnd);
+					var watch = new Stopwatch();
+					var jsonText = await GetMonacoCodeAsync();
+
 					watch.Start();
-					var response = await _client.RequestAsync(packetConvertor.ToPacket(textRange.Text));
+					var response = await _client.RequestAsync(packetConvertor.ToPacket(jsonText));
 					watch.Stop();
-					
-					
-					PrintLog($"elapsedTime : {watch.ElapsedMilliseconds}");
+
+					PrintLog($"elapsedTime : {watch.ElapsedMilliseconds}ms");
 					PrintLog($"Message: {response}");
 				}
 			}
