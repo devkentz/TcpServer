@@ -11,6 +11,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" />
     <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="NetCoreServer" />
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="Microsoft.Extensions.Logging" />

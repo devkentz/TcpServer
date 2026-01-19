@@ -28,7 +28,7 @@ namespace ProtoTestTool
                 .WithReferences(
                     typeof(object).Assembly,                           
                     typeof(Google.Protobuf.IMessage).Assembly,         
-                    typeof(IScriptContext).Assembly,                   
+                    typeof(ScriptGlobals).Assembly,                   
                     Assembly.Load("System.Runtime"),
                     Assembly.Load("System.Collections"),
                     Assembly.Load("netstandard")
@@ -58,32 +58,69 @@ namespace ProtoTestTool
             return compilation.GetDiagnostics();
         }
 
-        public async Task<IScriptContext> LoadScriptAsync(string scriptPath)
-        {
-            // Backward compatibility for single file
-            return await LoadScriptWithReferencesAsync(scriptPath, null);
-        }
 
-        public async Task<string> CompileToDllAsync(string scriptPath, IEnumerable<string> referencePaths = null)
+
+        public async Task<string> CompileToDllAsync(string scriptPath, IEnumerable<string>? referencePaths = null)
         {
             if (!File.Exists(scriptPath))
                 throw new FileNotFoundException($"Script file not found: {scriptPath}");
 
             var options = GetScriptOptions(scriptPath, referencePaths);
-
             using var stream = File.OpenRead(scriptPath);
             var sourceText = SourceText.From(stream, Encoding.UTF8, checksumAlgorithm: SourceHashAlgorithm.Sha1);
+            var dir = Path.GetDirectoryName(scriptPath) ?? AppDomain.CurrentDomain.BaseDirectory;
+            var name = Path.GetFileNameWithoutExtension(scriptPath);
+            var randomId = Guid.NewGuid().ToString("N").Substring(0, 8);
+            var dllPath = Path.Combine(dir, $"{name}.{randomId}.dll");
+            var pdbPath = Path.Combine(dir, $"{name}.{randomId}.pdb");
 
-            var script = CSharpScript.Create(sourceText.ToString(), options);
-            var compilation = script.GetCompilation();
+            // Cleanup old files (Try-Catch to ignore locked files)
+            try
+            {
+                var oldFiles = Directory.GetFiles(dir, $"{name}.*.dll")
+                    .Concat(Directory.GetFiles(dir, $"{name}.*.pdb"));
+                foreach (var oldFile in oldFiles)
+                {
+                    try { File.Delete(oldFile); } catch { }
+                }
+            }
+            catch { }
 
-            var oldTree = compilation.SyntaxTrees.First();
-            var parseOptions = oldTree.Options as CSharpParseOptions;
-            var newTree = CSharpSyntaxTree.ParseText(sourceText, parseOptions, scriptPath);
-            compilation = compilation.ReplaceSyntaxTree(oldTree, newTree);
+            var isScript = scriptPath.EndsWith(".csx", StringComparison.OrdinalIgnoreCase);
 
-            var dllPath = Path.ChangeExtension(scriptPath, ".dll");
-            var pdbPath = Path.ChangeExtension(scriptPath, ".pdb");
+            CSharpCompilation compilation;
+
+            if (isScript)
+            {
+                var script = CSharpScript.Create(sourceText.ToString(), options);
+                compilation = (CSharpCompilation)script.GetCompilation();
+                
+                // Force parse options update if needed (usually handled by CSharpScript)
+                var oldTree = compilation.SyntaxTrees.First();
+                var parseOptions = oldTree.Options as CSharpParseOptions;
+                var newTree = CSharpSyntaxTree.ParseText(sourceText, parseOptions, scriptPath);
+                compilation = compilation.ReplaceSyntaxTree(oldTree, newTree);
+            }
+            else
+            {
+                // Standard C# Compilation (for .cs files)
+                var parseOptions = new CSharpParseOptions(LanguageVersion.Latest, DocumentationMode.Parse, SourceCodeKind.Regular);
+                var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, parseOptions, scriptPath);
+                
+                var assemblyName = Path.GetFileNameWithoutExtension(scriptPath);
+                
+                // Get references from ScriptOptions
+                var references = options.MetadataReferences;
+
+                compilation = CSharpCompilation.Create(
+                    assemblyName,
+                    new[] { syntaxTree },
+                    references,
+                    new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, 
+                        optimizationLevel: OptimizationLevel.Debug, // or Release
+                        platform: Platform.AnyCpu)
+                );
+            }
 
             await using var peStream = File.Create(dllPath);
             await using var pdbStream = File.Create(pdbPath);
@@ -101,7 +138,7 @@ namespace ProtoTestTool
             return dllPath;
         }
 
-        public async Task<IScriptContext> LoadScriptWithReferencesAsync(string scriptPath, IEnumerable<string> referencePaths)
+        public Task<Assembly> LoadScriptWithReferencesAsync(string scriptPath, IEnumerable<string> referencePaths)
         {
             // We compile this one to memory, but referencing the DLLs on disk
             if (!File.Exists(scriptPath))
@@ -112,7 +149,13 @@ namespace ProtoTestTool
             using var stream = File.OpenRead(scriptPath);
             var sourceText = SourceText.From(stream, Encoding.UTF8, checksumAlgorithm: SourceHashAlgorithm.Sha1);
 
-            var script = CSharpScript.Create<IScriptContext>(sourceText.ToString(), options);
+            // Create script without return type expectation
+            // Note: We use CSharpCompilation directly now if needed, but for 'scripts' we might use CSharpScript?
+            // Actually this method is used for Context loading likely dealing with scripts (.csx).
+            // Let's keep using CSharpScript for .csx logic or unify.
+            // PacketHandler.csx is a script.
+            
+            var script = CSharpScript.Create(sourceText.ToString(), options);
             var compilation = script.GetCompilation();
 
             var oldTree = compilation.SyntaxTrees.First();
@@ -137,17 +180,7 @@ namespace ProtoTestTool
             pdbStream.Seek(0, SeekOrigin.Begin);
 
             var assembly = Assembly.Load(peStream.ToArray(), pdbStream.ToArray());
-            var type = assembly.GetType("Submission#0");
-            var factoryMethod = type.GetMethod("<Factory>", BindingFlags.Static | BindingFlags.Public);
-
-            if (factoryMethod == null) throw new InvalidOperationException("Could not find script entry point.");
-
-            var task = (Task<IScriptContext>)factoryMethod.Invoke(null, new object[] { new object[] { null, null } });
-            var result = await task;
-
-            if (result == null) throw new InvalidOperationException("The script returned null.");
-
-            return result;
+            return Task.FromResult(assembly);
         }
     }
 }

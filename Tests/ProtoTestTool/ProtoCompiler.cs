@@ -7,8 +7,8 @@ namespace ProtoTestTool
 {
     public class ProtoCompiler
     {
-        private readonly string _protocPath;
-        private readonly string _includePath;
+        private string _protocPath = "protoc"; 
+        private string _includePath = null!;
 
         public ProtoCompiler()
         {
@@ -30,7 +30,7 @@ namespace ProtoTestTool
                     if (File.Exists(path))
                     {
                         _protocPath = path;
-                        _includePath = Path.GetDirectoryName(Path.GetDirectoryName(path)); // tools folder
+                        _includePath = Path.GetDirectoryName(Path.GetDirectoryName(path)) ?? ""; // tools folder
                         break;
                     }
                 }
@@ -67,8 +67,9 @@ namespace ProtoTestTool
             };
 
             using var process = Process.Start(startInfo);
-            var output = process.StandardOutput.ReadToEnd();
-            var error = process.StandardError.ReadToEnd();
+            if (process == null) throw new InvalidOperationException("Failed to start protoc.");
+            var output = process.StandardOutput!.ReadToEnd();
+            var error = process.StandardError!.ReadToEnd();
             process.WaitForExit();
 
             if (process.ExitCode != 0)

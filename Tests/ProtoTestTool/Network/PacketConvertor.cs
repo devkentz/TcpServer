@@ -1,6 +1,5 @@
 ﻿using Google.Protobuf;
 using Newtonsoft.Json;
-using TestClient.Proto;
 
 namespace ProtoTestTool.Network;
 

@@ -1,77 +1,35 @@
 using System;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using Google.Protobuf;
+using System.Threading.Tasks;
 using ProtoTestTool.ScriptContract;
 
-public class MyScriptContext : IScriptContext
+// ************************************************************
+// * Packet Handler Script
+// * 
+// * Implement Interceptors to intercept/modify traffic.
+// ************************************************************
+
+public class MyPacketHandler : IProxyPacketInterceptor, IClientPacketInterceptor
 {
-    public IPacketSerializer Serializer { get; private set; }
-    public IPacketRegistry Registry { get; private set; }
-    
-    private Action<string> _logger;
-
-    public void SetLogger(Action<string> logAction)
+    // Called when Proxy receives data from Client (Upstream)
+    public ValueTask OnInboundAsync(ProxyPacketContext context)
     {
-        _logger = logAction;
+        // context.Raw is the byte array.
+        // You can decode it here if needed or just log size.
+        ScriptGlobals.Log.Info($"[Proxy] Inbound: {context.Raw.Length} bytes");
+        
+        return ValueTask.CompletedTask;
     }
 
-    public void Initialize(IPacketRegistry registry, IPacketSerializer serializer)
+    // Called when Proxy receives data from Server (Downstream)
+    public ValueTask OnOutboundAsync(ProxyPacketContext context)
     {
-        if (_logger == null) 
-        _logger = Console.WriteLine;
-        
-        // ---------------------------------------------------------
-        // TODO: Update Path to your actual Protocol DLLs
-        // ---------------------------------------------------------
-        var dllPaths = new[]
-        {
-             @"..\..\Protocol\bin\Debug\net9.0\Protocol.dll",
-             @"..\..\NetworkServer.ProtoGenerator\bin\Debug\net9.0\NetworkServer.ProtoGenerator.dll"
-        };
-
-        foreach (var path in dllPaths)
-        {
-            if (File.Exists(path))
-            {
-                LoadAssembly(path, registry);
-            }
-            else
-            {
-                _logger($"[Script] DLL not found: {path}");
-            }
-        }
-
-        Registry = registry;
-        Serializer = serializer;
-        
-        _logger("[Script] Initialized successfully.");
+        ScriptGlobals.Log.Info($"[Proxy] Outbound: {context.Raw.Length} bytes");
+        return ValueTask.CompletedTask;
     }
 
-    private void LoadAssembly(string path, IPacketRegistry registry)
+    // Called before Test Client sends a packet
+    public void OnBeforeSend(ClientPacketContext context)
     {
-        try
-        {
-            var assembly = Assembly.LoadFrom(Path.GetFullPath(path));
-            var types = assembly.GetTypes()
-                .Where(t => typeof(IMessage).IsAssignableFrom(t) && !t.IsAbstract);
-
-            int count = 0;
-            foreach (var type in types)
-            {
-                // Simple ID logic (Hash). Replace with actual ID logic.
-                int id = type.Name.GetHashCode(); 
-                registry.Register(id, type);
-                count++;
-            }
-            _logger($"[Script] Loaded {count} messages from {Path.GetFileName(path)}");
-        }
-        catch (Exception ex)
-        {
-            _logger($"[Script] Failed to load {path}: {ex.Message}");
-        }
+        ScriptGlobals.Log.Info($"[Client] Sending Packet: {context.Message}");
     }
 }
-
-return new MyScriptContext();

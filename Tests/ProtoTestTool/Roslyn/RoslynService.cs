@@ -18,7 +18,9 @@ namespace ProtoTestTool.Roslyn
                 typeof(object).Assembly, 
                 typeof(System.Linq.Enumerable).Assembly, 
                 typeof(Google.Protobuf.IMessage).Assembly,
-                typeof(ProtoTestTool.ScriptContract.IScriptContext).Assembly,
+                typeof(ProtoTestTool.ScriptContract.ScriptGlobals).Assembly,
+                typeof(System.Buffers.ReadOnlySequence<>).Assembly,
+                typeof(System.Memory<>).Assembly,
                 Assembly.Load("System.Runtime"),
                 Assembly.Load("System.Collections"),
                 Assembly.Load("netstandard")

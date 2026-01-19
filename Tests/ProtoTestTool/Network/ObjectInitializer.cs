@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Google.Protobuf.Collections;
 
-namespace TestClient.Proto;
+namespace ProtoTestTool.Network;
 public static class ObjectInitializer
 {
     public static void EnsureNonNullFields(object obj, bool addDefaultElements = false)

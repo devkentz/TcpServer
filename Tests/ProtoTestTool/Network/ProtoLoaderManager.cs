@@ -19,7 +19,13 @@ namespace ProtoTestTool.Network
         public void LoadAllProtos()
         {
             var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            var dllFiles = Directory.GetFiles(baseDirectory, "*.dll", SearchOption.TopDirectoryOnly);
+            var dllFiles = Directory.GetFiles(baseDirectory, "*.dll", SearchOption.TopDirectoryOnly).ToList();
+            
+            var protoGenDir = Path.Combine(baseDirectory, "ProtoGen");
+            if (Directory.Exists(protoGenDir))
+            {
+                dllFiles.AddRange(Directory.GetFiles(protoGenDir, "*.dll", SearchOption.TopDirectoryOnly));
+            }
 
             // 1. 어셈블리 로드 (중복 제거를 위해 Dictionary 사용)
             var assembliesByName = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
@@ -154,5 +160,44 @@ namespace ProtoTestTool.Network
         public PacketConvertor? Find(string name) => PacketsByMsgId.GetValueOrDefault(name);
 
         public IReadOnlyList<PacketConvertor> GetSendPackets() => SendPackets.Values;
+        
+        // Runtime Registration
+        public void RegisterPacket(Type type)
+        {
+            var name = type.Name;
+            var convertor = new PacketConvertor { Name = name, Type = type };
+            
+            // We need to update the FrozenDictionaries. 
+            // Since they are immutable, we might need to recreate them or change them to normal Dictionaries for this tool's purpose.
+            // For now, let's keep it simple and just "add" if we can, but FrozenDictionary doesn't support add.
+            // Converting to Mutable for the Tool's prototype phase might be better.
+            
+            // Hack for Prototype: Reflection set or simple replacement?
+            // Better: Change fields to Dictionary during refactor or just rebuild them here.
+            
+            var newPackets = new Dictionary<string, PacketConvertor>(PacketsByMsgId);
+            newPackets[name] = convertor;
+            PacketsByMsgId = newPackets.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+            if (name.EndsWith("Req"))
+            {
+                var newSend = new Dictionary<string, PacketConvertor>(SendPackets);
+                newSend[name] = convertor;
+                SendPackets = newSend.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+                
+                // Update Mapping
+                 var baseName = name[..^3];
+                 var responseName = baseName + "Res";
+                 var newMap = new Dictionary<string, string>(RequestToResponse);
+                 newMap[name] = responseName;
+                 RequestToResponse = newMap.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }
+            else if (name.EndsWith("Res") || name.EndsWith("Notify"))
+            {
+                var newRecv = new Dictionary<string, PacketConvertor>(ReceivePackets);
+                newRecv[name] = convertor;
+                ReceivePackets = newRecv.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }
+        }
     }
 }

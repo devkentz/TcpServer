@@ -5,177 +5,265 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:roslyn="clr-namespace:RoslynPad.Editor;assembly=RoslynPad.Editor.Windows"
         mc:Ignorable="d"
-        Title="ProtoTestTool - Scriptable Packet Tester" Height="800" Width="1200">
-    <Window.Resources>
-        <Style TargetType="Button">
-            <Setter Property="Padding" Value="12,6"/>
-            <Setter Property="Margin" Value="2"/>
-            <Setter Property="Background" Value="#DDDDDD"/>
-            <Setter Property="BorderThickness" Value="1"/>
-        </Style>
-        <Style TargetType="TabItem">
-            <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="FontSize" Value="14"/>
-        </Style>
-        <Style TargetType="GroupBox">
-            <Setter Property="Margin" Value="5"/>
-            <Setter Property="Padding" Value="5"/>
-            <Setter Property="BorderBrush" Value="#FFAAAAAA"/>
-        </Style>
-    </Window.Resources>
+        Title="TCP Packet Lab" Height="900" Width="1400"
+        WindowStartupLocation="CenterScreen">
     
-    <Grid Margin="10">
-        <TabControl>
-            <!-- TAB 1: Connection -->
-            <TabItem Header="서버 연결 (Connection)">
-                <Grid Margin="10">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/> <!-- Connection Settings -->
-                        <RowDefinition Height="*"/>    <!-- Logs -->
-                    </Grid.RowDefinitions>
+    <Grid Background="{StaticResource BgBrush}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="50"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="30"/>
+        </Grid.RowDefinitions>
 
-                    <GroupBox Header="연결 설정 (Server Info)" Grid.Row="0" Margin="0,0,0,10">
-                        <Grid Margin="5">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="150"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="IP:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                            <TextBox x:Name="IpBox" Text="127.0.0.1" VerticalContentAlignment="Center" Margin="0,0,10,0" Grid.Column="1"/>
-                            
-                            <TextBlock Text="Port:" VerticalAlignment="Center" Margin="0,0,5,0" Grid.Column="2"/>
-                            <TextBox x:Name="PortBox" Text="9000" VerticalContentAlignment="Center" Margin="0,0,10,0" Grid.Column="3"/>
+        <!-- 1. Top Bar -->
+        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,0,0,1">
+            <DockPanel LastChildFill="False">
+                <TextBlock Text="TCP Packet Lab" Foreground="{StaticResource HeaderTextBrush}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="15,0"/>
+                
+                <!-- Mode Switcher -->
+                <StackPanel Orientation="Horizontal" Margin="50,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Mode:" Foreground="{StaticResource SmallTextBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <RadioButton Content="Test Client" IsChecked="True" Click="ModeClient_Click" Width="100"/>
+                    <RadioButton Content="Reverse Proxy" Click="ModeProxy_Click" Width="110" Margin="5,0"/>
+                    <RadioButton Content="Script Editor" Click="ModeEditor_Click" Width="110"/>
+                </StackPanel>
+                
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="0,0,15,0">
+                    <TextBlock Text="⚡ Hot Reload" Foreground="{StaticResource SuccessBrush}" FontSize="10"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
 
-                            <StackPanel Orientation="Horizontal" Grid.Column="5">
-                                <Button x:Name="ConnectBtn" Content="연결 (Connect)" Padding="15,5" Margin="0,0,5,0" Click="ConnectBtn_Click"/>
-                                <Button x:Name="DisconnectBtn" Content="해제 (Disconnect)" Padding="15,5" IsEnabled="False" Click="DisconnectBtn_Click"/>
-                            </StackPanel>
-                        </Grid>
-                    </GroupBox>
+        <!-- 2. Sidebar -->
+        <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource BgBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,0,1,0">
+            <StackPanel Margin="10">
+                <!-- Codec Config -->
+                <GroupBox Header="📦 Codec Configuration">
+                    <StackPanel>
+                        <TextBlock Text="Protobuf v3" Foreground="{StaticResource PrimaryTextBrush}" Margin="2"/>
+                         <TextBlock Text="✓ Auto-load" Foreground="{StaticResource SmallTextBrush}" FontSize="10" Margin="2"/>
+                        <Button x:Name="LoadProtoFolderBtn" Content="Load Folder" Margin="0,5" Click="LoadProtoFolderBtn_Click"/>
+                        <Button x:Name="ReloadProtoBtn" Content="Reload" Click="ReloadProtoBtn_Click"/>
+                        <!-- Hidden Proto Buttons mapped to Codec area -->
+                        <Button x:Name="LoadProtoFileBtn_Client" Visibility="Collapsed" Click="LoadProtoFileBtn_Click"/> 
+                         <Button x:Name="LoadProtoFolderBtn_Client" Visibility="Collapsed" Click="LoadProtoFolderBtn_Click"/>
+                         <ListBox x:Name="ProtoFileListBox" Height="100" Margin="0,5" Visibility="Collapsed"/> 
+                         <ListBox x:Name="ProtoMessageListBox" Visibility="Collapsed"/>
+                         <TextBox x:Name="ProtoLogBox" Visibility="Collapsed"/>
+                         <!-- We use ProtoFileListBox mainly for logic, keep it but hidden or visible on demand? -->
+                    </StackPanel>
+                </GroupBox>
 
-                    <GroupBox Header="시스템 로그 (System Logs)" Grid.Row="1">
-                        <RichTextBox x:Name="LogBox" IsReadOnly="True" VerticalScrollBarVisibility="Auto">
-                            <FlowDocument>
-                                <Paragraph>
-                                    <Run Text="도구가 초기화되었습니다..."/>
-                                </Paragraph>
-                            </FlowDocument>
-                        </RichTextBox>
-                    </GroupBox>
-                </Grid>
-            </TabItem>
+                <!-- Scripts -->
+                <GroupBox Header="🎯 Scripts" Margin="0,15,0,0">
+                    <StackPanel>
+                        <TextBlock Text="✓ PacketRegistry" Foreground="{StaticResource PrimaryTextBrush}"/>
+                        <TextBlock Text="✓ PacketSerializer" Foreground="{StaticResource PrimaryTextBrush}"/>
+                        <TextBlock Text="✓ PacketHandler" Foreground="{StaticResource PrimaryTextBrush}"/>
+                         <TextBlock Text="✓ Headers" Foreground="{StaticResource PrimaryTextBrush}"/>
+                        <Button Content="Edit Scripts" Margin="0,10" Click="ModeEditor_Click"/>
+                    </StackPanel>
+                </GroupBox>
 
-            <!-- TAB 2: Script Editor -->
-            <TabItem x:Name="ScriptEditorTab" Header="스크립트 편집 (Script Editor)" Selector.Selected="ScriptEditorTab_Selected">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
+                 <!-- Metrics (Placeholder) -->
+                <GroupBox Header="📊 Metrics" Margin="0,15,0,0">
+                     <StackPanel>
+                        <TextBlock Text="Throughput: 0 pkt/s" Foreground="{StaticResource SuccessBrush}"/>
+                    </StackPanel>
+                </GroupBox>
+                
+                 <!-- State Store -->
+                 <GroupBox Header="💾 State Store" Margin="0,15,0,0">
+                     <StackPanel>
+                         <Button Content="Reset State" Click="ResetState_Click"/> 
+                     </StackPanel>
+                 </GroupBox>
+            </StackPanel>
+        </Border>
 
-                    <!-- Editor Area -->
-                    <Grid Grid.Column="0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                            <RowDefinition Height="5"/>
-                            <RowDefinition Height="150"/>
-                        </Grid.RowDefinitions>
-                        
-                        <StackPanel Orientation="Horizontal" Margin="5">
-                            <Button x:Name="CompileScriptBtn" Content="전체 컴파일 (Compile All)" Padding="10,5" Click="CompileScriptBtn_Click" Margin="0,0,10,0"/>
-                            <Button x:Name="ImportProtoBtn" Content="Proto 가져오기 (Import)" Padding="10,5" Click="ImportProtoBtn_Click" Margin="0,0,10,0"/>
-                            <TextBlock Text="인텔리센스 활성화됨 (RoslynPad)" VerticalAlignment="Center" Foreground="Gray"/>
-                        </StackPanel>
-
-                        <TabControl Grid.Row="1" x:Name="MethodTabs" TabStripPlacement="Left">
-                            <!-- 1. Packet Registry -->
-                            <TabItem Header="Packet Registry (패킷 등록)">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="*"/>
-                                    </Grid.RowDefinitions>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5" Background="Transparent">
-                                        <Button Content="불러오기 (Load Registry)" Click="LoadRegistryBtn_Click"/>
-                                        <Button Content="저장하기 (Save Registry)" Click="SaveRegistryBtn_Click"/>
-                                    </StackPanel>
-                                    <roslyn:RoslynCodeEditor Grid.Row="1" x:Name="RegistryEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True"/>
-                                </Grid>
-                            </TabItem>
-                            
-                            <!-- 2. Packet Serializer -->
-                            <TabItem Header="Packet Serializer (직렬화)">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="*"/>
-                                    </Grid.RowDefinitions>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5" Background="Transparent">
-                                        <Button Content="불러오기 (Load Serializer)" Click="LoadSerializerBtn_Click"/>
-                                        <Button Content="저장하기 (Save Serializer)" Click="SaveSerializerBtn_Click"/>
-                                    </StackPanel>
-                                    <roslyn:RoslynCodeEditor Grid.Row="1" x:Name="SerializerEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True"/>
-                                </Grid>
-                            </TabItem>
-                            
-                            <!-- 3. Script Context -->
-                            <TabItem Header="Script Context (핸들러)">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="*"/>
-                                    </Grid.RowDefinitions>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5" Background="Transparent">
-                                        <Button Content="불러오기 (Load Handler)" Click="LoadContextBtn_Click"/>
-                                        <Button Content="저장하기 (Save Handler)" Click="SaveContextBtn_Click"/>
-                                    </StackPanel>
-                                    <roslyn:RoslynCodeEditor Grid.Row="1" x:Name="ContextEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True"/>
-                                </Grid>
-                            </TabItem>
-                        </TabControl>
-
-                        <!-- Resizer -->
-                        <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Center" ResizeBehavior="PreviousAndNext" ShowsPreview="True" Background="#DDDDDD"/>
-
-                        <!-- Script Compilation Log -->
-                        <GroupBox Header="컴파일 로그 (Compilation Logs)" Grid.Row="3" Margin="5">
-                            <TextBox x:Name="ScriptLogBox" IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" TextWrapping="Wrap" />
-                        </GroupBox>
-                    </Grid>
-                </Grid>
-            </TabItem>
+        <!-- 3. Main Content -->
+        <Grid Grid.Row="1" Grid.Column="1" Margin="20">
             
-            <!-- TAB 3: Packet Tester -->
-            <TabItem Header="패킷 전송 (Packet Sender)">
-                <Grid Margin="5">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="250"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
+            <!-- VIEW 1: Test Client -->
+            <Grid x:Name="ClientView">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/> <!-- Connection -->
+                    <RowDefinition Height="Auto"/> <!-- Pipeline -->
+                    <RowDefinition Height="*"/>    <!-- Inspector/Stream -->
+                    <RowDefinition Height="150"/>  <!-- Logs -->
+                </Grid.RowDefinitions>
 
-                    <!-- Packet List -->
-                    <GroupBox Header="사용 가능 패킷 (Available Packets)" Grid.Column="0" Margin="0,0,5,0">
-                        <ListBox x:Name="PacketListBox" SelectionChanged="PacketListBox_SelectionChanged"/>
-                    </GroupBox>
+                <!-- Connection Panel -->
+                <Border Style="{StaticResource PanelStyle}" Padding="15" Margin="0,0,0,15">
+                     <DockPanel>
+                         <TextBlock Text="Connection" FontWeight="Bold" Foreground="{StaticResource HeaderTextBrush}" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                         
+                         <TextBlock Text="Target:" VerticalAlignment="Center" Foreground="{StaticResource SmallTextBrush}"/>
+                         <TextBox x:Name="IpBox" Text="127.0.0.1" Width="120" Margin="5,0"/>
+                         <TextBlock Text=":" VerticalAlignment="Center"/>
+                         <TextBox x:Name="PortBox" Text="9000" Width="60" Margin="5,0"/>
+                         
+                         <Button x:Name="ConnectBtn" Content="Connect" Click="ConnectBtn_Click" Width="80" Margin="10,0"/>
+                         <Button x:Name="DisconnectBtn" Content="Disconnect" Click="DisconnectBtn_Click" Width="80" IsEnabled="False"/>
 
-                    <!-- Packet Editor -->
-                    <GroupBox Header="패킷 내용 (JSON Payload)" Grid.Column="1">
-                        <Grid Margin="5">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <TextBox x:Name="JsonEditor" AcceptsReturn="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto"/>
-                            
-                            <Button x:Name="SendBtn" Content="패킷 전송 (Send Packet)" Grid.Row="1" Margin="0,10,0,0" Height="40" Click="SendBtn_Click" IsEnabled="False"/>
-                        </Grid>
-                    </GroupBox>
+                         <TextBlock x:Name="ConnectionStatusText" Text="Ready" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="{StaticResource SuccessBrush}"/>
+                     </DockPanel>
+                </Border>
+
+                <!-- Packet Selection & Action (Merged into Connection or separate) -->
+                <Border Grid.Row="1" Style="{StaticResource PanelStyle}" Padding="15" Margin="0,0,0,15">
+                     <Grid>
+                         <Grid.ColumnDefinitions>
+                             <ColumnDefinition Width="Auto"/>
+                             <ColumnDefinition Width="15"/>
+                             <ColumnDefinition Width="*"/>
+                             <ColumnDefinition Width="Auto"/>
+                         </Grid.ColumnDefinitions>
+                         
+                         <!-- Packet Selector (Replaces ListBox) -->
+                         <StackPanel Grid.Column="0">
+                             <TextBlock Text="Select Packet Type:" Foreground="{StaticResource SmallTextBrush}" Margin="0,0,0,5"/>
+                             <ComboBox x:Name="PacketListBox" Width="250" SelectionChanged="PacketListBox_SelectionChanged" DisplayMemberPath="Name"/>
+                         </StackPanel>
+                         
+                         <!-- Interceptor Pipeline Visualization (Placeholder) -->
+                         <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                              <TextBlock Text="Pipeline: Message -> Headers -> Interceptor -> Serialize" Foreground="{StaticResource SmallTextBrush}"/>
+                         </StackPanel>
+
+                         <!-- Send Button -->
+                         <Button x:Name="SendBtn" Grid.Column="3" Content="Send Packet 🚀" Width="120" Height="40" Background="{StaticResource AccentBrush}" Click="SendBtn_Click" IsEnabled="False"/>
+                     </Grid>
+                </Border>
+
+                <!-- Split: Inspector and Logs -->
+                <Grid Grid.Row="2">
+                     <Grid.ColumnDefinitions>
+                         <ColumnDefinition Width="*"/>
+                         <ColumnDefinition Width="10"/>
+                         <ColumnDefinition Width="*"/>
+                     </Grid.ColumnDefinitions>
+                     
+                     <!-- Request Inspector -->
+                     <GroupBox Header="Request Inspector">
+                         <TabControl>
+                             <TabItem Header="Body (JSON)">
+                                 <TextBox x:Name="JsonEditor" AcceptsReturn="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" Background="{StaticResource InputBrush}" Foreground="{StaticResource PrimaryTextBrush}" BorderThickness="0"/>
+                             </TabItem>
+                             <TabItem Header="Headers (C#)">
+                                 <roslyn:RoslynCodeEditor x:Name="HeaderScriptEditor" FontFamily="Consolas" FontSize="12" ShowLineNumbers="True" Background="White" Foreground="Black"/>
+                             </TabItem>
+                             <TabItem Header="Proto Source">
+                                 <roslyn:RoslynCodeEditor x:Name="ProtoSourceViewer" IsReadOnly="True" FontFamily="Consolas" FontSize="12" ShowLineNumbers="True" Background="White" Foreground="Black"/>
+                             </TabItem>
+                         </TabControl>
+                     </GroupBox>
+
+                     <!-- Response Inspector -->
+                     <GroupBox Header="Response Inspector" Grid.Column="2">
+                         <TabControl>
+                             <TabItem Header="Body (JSON)">
+                                 <TextBox x:Name="ResponseBox" IsReadOnly="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" Background="{StaticResource InputBrush}" Foreground="{StaticResource PrimaryTextBrush}" BorderThickness="0"/>
+                             </TabItem>
+                             <TabItem Header="Headers">
+                                 <DataGrid x:Name="ResponseHeaderGrid" AutoGenerateColumns="False" IsReadOnly="True">
+                                     <DataGrid.Columns>
+                                         <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="*"/>
+                                         <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                                     </DataGrid.Columns>
+                                 </DataGrid>
+                             </TabItem>
+                         </TabControl>
+                     </GroupBox>
                 </Grid>
-            </TabItem>
-        </TabControl>
+
+                <!-- System Logs (Bottom of Client View) -->
+                <GroupBox Header="System Logs" Grid.Row="3" Margin="0,15,0,0">
+                    <RichTextBox x:Name="LogBox" IsReadOnly="True" VerticalScrollBarVisibility="Auto" Background="{StaticResource InputBrush}" Foreground="{StaticResource SmallTextBrush}" BorderThickness="0"/>
+                </GroupBox>
+            </Grid>
+
+            <!-- VIEW 2: Reverse Proxy -->
+            <Grid x:Name="ProxyView" Visibility="Collapsed">
+                 <Grid.RowDefinitions>
+                     <RowDefinition Height="Auto"/>
+                     <RowDefinition Height="*"/>
+                 </Grid.RowDefinitions>
+                 
+                 <GroupBox Header="Proxy Configuration">
+                     <StackPanel Orientation="Horizontal" Margin="5">
+                         <TextBlock Text="Local Port:" VerticalAlignment="Center" Margin="5"/>
+                         <TextBox x:Name="ProxyLocalPortBox" Text="9000" Width="60"/>
+                         <TextBlock Text="Target:" VerticalAlignment="Center" Margin="15,0,5,0"/>
+                         <TextBox x:Name="ProxyTargetIpBox" Text="127.0.0.1" Width="120"/>
+                         <TextBlock Text=":" VerticalAlignment="Center"/>
+                         <TextBox x:Name="ProxyTargetPortBox" Text="9001" Width="60"/>
+                         <Button x:Name="ProxyStartBtn" Content="Start Proxy" Margin="20,0,0,0" Click="ProxyStartBtn_Click"/>
+                     </StackPanel>
+                 </GroupBox>
+
+                 <Grid Grid.Row="1" Margin="0,10,0,0">
+                      <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="200"/>
+                          <ColumnDefinition Width="*"/>
+                      </Grid.ColumnDefinitions>
+                      <GroupBox Header="Interceptors">
+                          <ListBox x:Name="InterceptorListBox"/>
+                      </GroupBox>
+                      <GroupBox Header="Proxy Logs" Grid.Column="1">
+                          <TextBox x:Name="ProxyLogBox" IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Background="{StaticResource InputBrush}" Foreground="{StaticResource SmallTextBrush}"/>
+                      </GroupBox>
+                 </Grid>
+            </Grid>
+
+            <!-- VIEW 3: Editor -->
+            <Grid x:Name="EditorView" Visibility="Collapsed">
+                 <Grid.RowDefinitions>
+                     <RowDefinition Height="Auto"/>
+                     <RowDefinition Height="*"/>
+                     <RowDefinition Height="5"/>
+                     <RowDefinition Height="150"/>
+                 </Grid.RowDefinitions>
+                 
+                 <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,10">
+                      <Button x:Name="CompileScriptBtn" Content="Compile &amp; Hot Replacements" Click="CompileScriptBtn_Click"/>
+                 </DockPanel>
+
+                 <!-- Editor Tabs -->
+                 <TabControl x:Name="MethodTabs" Grid.Row="1">
+                      <TabItem Header="Packet Registry (.csx)">
+                          <roslyn:RoslynCodeEditor x:Name="RegistryEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True" Background="White" Foreground="Black"/>
+                      </TabItem>
+                      <TabItem Header="Packet Serializer (.csx)">
+                           <roslyn:RoslynCodeEditor x:Name="SerializerEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True" Background="White" Foreground="Black"/>
+                      </TabItem>
+                      <TabItem Header="Packet Handler (.csx)">
+                           <roslyn:RoslynCodeEditor x:Name="ContextEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True" Background="White" Foreground="Black"/>
+                      </TabItem>
+                 </TabControl>
+                 
+                 <!-- Splitter -->
+                 <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#444" ShowsPreview="True"/>
+
+                 <!-- Script Logs -->
+                 <GroupBox Header="Build &amp; Script Logs" Grid.Row="3" Margin="0,0,0,0">
+                    <TextBox x:Name="ScriptLogBox" IsReadOnly="True" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" TextWrapping="Wrap" Background="{StaticResource InputBrush}" Foreground="{StaticResource SuccessBrush}" FontFamily="Consolas"/>
+                 </GroupBox>
+            </Grid>
+        </Grid>
+
+        <!-- 4. Status Bar -->
+        <Border Grid.Row="2" Grid.ColumnSpan="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,1,0,0">
+            <DockPanel LastChildFill="False" Margin="10,0">
+                <TextBlock Text="Ready" Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center"/>
+                <TextBlock x:Name="ResponseStatusText" Text="" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="{StaticResource SmallTextBrush}"/>
+            </DockPanel>
+        </Border>
+
+
     </Grid>
 </Window>
