@@ -17,12 +17,16 @@ namespace ProtoTestTool
         private SimpleTcpClient? _client;
         private readonly ScriptLoader _scriptLoader = new();
         private readonly List<byte> _receiveBuffer = new();
-        
+
         // Roslyn
         private readonly RoslynService _roslynService;
-        
+
         // Editor State
         private string _currentEditingFile = "";
+
+        // Workspace
+        private string _workspacePath = "";
+        private const string SettingsFileName = "prototesttool.settings.json";
 
         // UI Binding Models
         public class KeyValueItem
@@ -51,6 +55,9 @@ namespace ProtoTestTool
 
             _roslynService = new RoslynService();
 
+            // Load Workspace Settings
+            LoadWorkspaceSettings();
+
             // Use Loaded event for async initialization (safer than constructor)
             Loaded += MainWindow_Loaded;
 
@@ -68,6 +75,12 @@ namespace ProtoTestTool
         {
             try
             {
+                // Show Workspace dialog if not set
+                if (string.IsNullOrWhiteSpace(_workspacePath) || !Directory.Exists(_workspacePath))
+                {
+                    ShowWorkspaceDialog();
+                }
+
                 await InitializeRoslynEditorAsync();
             }
             catch (Exception ex)
@@ -75,6 +88,88 @@ namespace ProtoTestTool
                 MessageBox.Show($"Editor Init Failed: {ex.Message}");
             }
         }
+
+        #region Workspace Management
+        private void WorkspaceBtn_Click(object sender, RoutedEventArgs e)
+        {
+            ShowWorkspaceDialog();
+        }
+
+        private void ShowWorkspaceDialog()
+        {
+            var dialog = new WorkspaceDialog(_workspacePath)
+            {
+                Owner = this
+            };
+
+            if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
+            {
+                _workspacePath = dialog.SelectedPath;
+                SaveWorkspaceSettings();
+                UpdateWorkspaceUI();
+                AppendLog($"Workspace 설정됨: {_workspacePath}", Brushes.DeepSkyBlue);
+            }
+        }
+
+        private void LoadWorkspaceSettings()
+        {
+            try
+            {
+                var settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, SettingsFileName);
+                if (File.Exists(settingsPath))
+                {
+                    var json = File.ReadAllText(settingsPath);
+                    var settings = JsonConvert.DeserializeObject<AppSettings>(json);
+                    if (settings != null && !string.IsNullOrWhiteSpace(settings.WorkspacePath))
+                    {
+                        _workspacePath = settings.WorkspacePath;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore settings load errors
+            }
+
+            UpdateWorkspaceUI();
+        }
+
+        private void SaveWorkspaceSettings()
+        {
+            try
+            {
+                var settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, SettingsFileName);
+                var settings = new AppSettings { WorkspacePath = _workspacePath };
+                var json = JsonConvert.SerializeObject(settings, Formatting.Indented);
+                File.WriteAllText(settingsPath, json);
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"설정 저장 실패: {ex.Message}", Brushes.Red);
+            }
+        }
+
+        private void UpdateWorkspaceUI()
+        {
+            if (!string.IsNullOrWhiteSpace(_workspacePath))
+            {
+                WorkspacePathText.Text = _workspacePath;
+                WorkspacePathText.ToolTip = _workspacePath;
+            }
+            else
+            {
+                WorkspacePathText.Text = "(설정되지 않음)";
+                WorkspacePathText.ToolTip = null;
+            }
+        }
+
+        public string GetWorkspacePath() => _workspacePath;
+
+        private class AppSettings
+        {
+            public string WorkspacePath { get; set; } = "";
+        }
+        #endregion
 
         #region Mode Switching
         private void ModeClient_Click(object sender, RoutedEventArgs e)

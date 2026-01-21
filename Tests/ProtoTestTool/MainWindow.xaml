@@ -33,7 +33,9 @@
                 </StackPanel>
                 
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="0,0,15,0">
-                    <TextBlock Text="⚡ Hot Reload" Foreground="{StaticResource SuccessBrush}" FontSize="10"/>
+                    <Button x:Name="WorkspaceBtn" Content="📁 Workspace" Click="WorkspaceBtn_Click" Margin="0,0,15,0" Background="{StaticResource PanelBrush}"/>
+                    <TextBlock x:Name="WorkspacePathText" Text="" Foreground="{StaticResource SmallTextBrush}" FontSize="10" VerticalAlignment="Center" Margin="0,0,15,0" MaxWidth="200" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="⚡ Hot Reload" Foreground="{StaticResource SuccessBrush}" FontSize="10" VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
         </Border>
