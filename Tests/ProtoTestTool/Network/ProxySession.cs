@@ -1,6 +1,4 @@
-using System;
 using System.Buffers;
-using System.Net.Sockets;
 using NetCoreServer;
 using ProtoTestTool.ScriptContract;
 
@@ -114,7 +112,7 @@ namespace ProtoTestTool.Network
                         }
                         else
                         {
-                            var mem = _codec.Encode(context.Message!);
+                            var mem = _codec.Encode(context.Packet);
                             dataToSend = mem.ToArray();
                         }
 

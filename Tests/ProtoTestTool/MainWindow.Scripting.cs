@@ -68,44 +68,49 @@ namespace ProtoTestTool
         private IScriptStateStore? _scriptState;
         private IClientPacketInterceptor? _clientInterceptor;
 
+        // Document IDs for Reference Updates
+        private DocumentId? _docIdReg;
+        private DocumentId? _docIdSer;
+        private DocumentId? _docIdCtx;
+        private DocumentId? _docIdHead;
 
         private async Task InitializeRoslynEditorAsync()
         {
             // 1. Packet Registry
-            var docIdReg = _roslynService.Host.AddDocument(new DocumentCreationArgs(
+            _docIdReg = _roslynService.Host.AddDocument(new DocumentCreationArgs(
                 new StringTextSource("// Loading Registry..."), "PacketRegistry.csx", SourceCodeKind.Script)
             {
                 WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
             });
             await RegistryEditor.InitializeAsync(_roslynService.Host, new ClassificationHighlightColors(),
-                AppDomain.CurrentDomain.BaseDirectory, docIdReg.Id.ToString(), SourceCodeKind.Script);
+                AppDomain.CurrentDomain.BaseDirectory, _docIdReg.Id.ToString(), SourceCodeKind.Script);
 
             // 2. Packet Serializer
-            var docIdSer = _roslynService.Host.AddDocument(new DocumentCreationArgs(
+            _docIdSer = _roslynService.Host.AddDocument(new DocumentCreationArgs(
                 new StringTextSource("// Loading Serializer..."), "PacketSerializer.csx", SourceCodeKind.Script)
             {
                 WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
             });
             await SerializerEditor.InitializeAsync(_roslynService.Host, new ClassificationHighlightColors(),
-                AppDomain.CurrentDomain.BaseDirectory, docIdSer.Id.ToString(), SourceCodeKind.Script);
+                AppDomain.CurrentDomain.BaseDirectory, _docIdSer.Id.ToString(), SourceCodeKind.Script);
 
             // 3. User Logic (Context)
-            var docIdCtx = _roslynService.Host.AddDocument(new DocumentCreationArgs(
+            _docIdCtx = _roslynService.Host.AddDocument(new DocumentCreationArgs(
                 new StringTextSource("// Loading Logic..."), "PacketHandler.csx", SourceCodeKind.Script)
             {
                 WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
             });
             await ContextEditor.InitializeAsync(_roslynService.Host, new ClassificationHighlightColors(),
-                AppDomain.CurrentDomain.BaseDirectory, docIdCtx.Id.ToString(), SourceCodeKind.Script);
+                AppDomain.CurrentDomain.BaseDirectory, _docIdCtx.Id.ToString(), SourceCodeKind.Script);
 
             // 4. Request Headers Script
-            var docIdHead = _roslynService.Host.AddDocument(new DocumentCreationArgs(
+            _docIdHead = _roslynService.Host.AddDocument(new DocumentCreationArgs(
                 new StringTextSource("// Headers Script"), "Headers.csx", SourceCodeKind.Script)
             {
                 WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
             });
             await HeaderScriptEditor.InitializeAsync(_roslynService.Host, new ClassificationHighlightColors(),
-                AppDomain.CurrentDomain.BaseDirectory, docIdHead.Id.ToString(), SourceCodeKind.Script);
+                AppDomain.CurrentDomain.BaseDirectory, _docIdHead.Id.ToString(), SourceCodeKind.Script);
             HeaderScriptEditor.Text = "// Headers[\"Authorization\"] = \"Bearer token\";\n";
 
             // Load Files or Defaults
@@ -370,17 +375,56 @@ namespace ProtoTestTool
 
                 // Note: Header names might be localized now, e.g. "Packet Registry (패킷 등록)"
                 // Use Contains to be safe
-                if (header.Contains("Packet Registry") || header.Contains("Packet Serializer"))
+                // Logging Helper
+                Action<string> uiLogger = (msg) => 
+                {
+                    Dispatcher.Invoke(() => 
+                    {
+                        ScriptLogBox.Text += $"\n{msg}";
+                        ScriptLogBox.ScrollToEnd();
+                    });
+                };
+
+                 if (header.Contains("Packet Registry") || header.Contains("Packet Serializer"))
                 {
                     // Validate only the current code
-                    string code = header.Contains("Packet Registry") ? RegistryEditor.Text : SerializerEditor.Text;
-
+                    bool isRegistry = header.Contains("Packet Registry");
+                    string code = isRegistry ? RegistryEditor.Text : SerializerEditor.Text;
+                    string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, isRegistry ? "PacketRegistry.csx" : "PacketSerializer.csx");
+                    string regDllPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketRegistry.dll");
+                    
                     ScriptLogBox.Text = $"검증 중 (Validating)...";
                     ScriptLogBox.Foreground = Brushes.White;
 
                     await Task.Run(() =>
                     {
-                        var diagnostics = _scriptLoader.ValidateScript(code);
+                        var extraRefs = new List<string>();
+                        if (header.Contains("Packet Serializer") && File.Exists(regDllPath)) 
+                        {
+                            extraRefs.Add(regDllPath);
+                        }
+
+                        var (diagnostics, resolvedRefs) = _scriptLoader.ValidateScript(code, filePath, uiLogger, extraRefs);
+                        
+                        // Update Editor References
+                        if (resolvedRefs != null && _roslynService != null)
+                        {
+                            var targetDocId = isRegistry ? _docIdReg : _docIdSer;
+                            if (targetDocId != null)
+                            {
+                                // Dispatch to UI thread if RoslynHost requires it? No, Workspace updates are thread safe usually.
+                                // But let's be safe or just call it.
+                                foreach (var refPath in resolvedRefs)
+                                {
+                                     _roslynService.AddReference(targetDocId, refPath);
+                                }
+                                foreach (var extra in extraRefs)
+                                {
+                                    _roslynService.AddReference(targetDocId, extra);
+                                }
+                            }
+                        }
+
                         var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
 
                         Dispatcher.Invoke(() =>
@@ -388,12 +432,12 @@ namespace ProtoTestTool
                             if (errors.Count > 0)
                             {
                                 var errorMsg = string.Join(Environment.NewLine, errors.Select(d => $"Line {d.Location.GetLineSpan().StartLinePosition.Line + 1}: {d.GetMessage()}"));
-                                ScriptLogBox.Text = $"[{DateTime.Now:HH:mm:ss}] 검증 실패 (Validation Failed):\n{errorMsg}";
+                                ScriptLogBox.Text += $"\n[{DateTime.Now:HH:mm:ss}] 검증 실패 (Validation Failed):\n{errorMsg}";
                                 ScriptLogBox.Foreground = Brushes.Red;
                             }
                             else
                             {
-                                ScriptLogBox.Text = $"[{DateTime.Now:HH:mm:ss}] 검증 성공 (Validation Success)!";
+                                ScriptLogBox.Text += $"\n[{DateTime.Now:HH:mm:ss}] 검증 성공 (Validation Success)!";
                                 ScriptLogBox.Foreground = Brushes.DeepSkyBlue;
                             }
                         });
@@ -402,11 +446,13 @@ namespace ProtoTestTool
                 else
                 {
                     // For Context, we run the full compilation (Integration Test)
-                    await CompileScriptAsync();
+                    await CompileScriptAsync(uiLogger);
                 }
             }
             catch (Exception ex)
             {
+                ScriptLogBox.Text += $"\n[Error] {ex.GetType().Name}: {ex.Message}";
+                ScriptLogBox.Foreground = Brushes.Red;
                 AppendLog($"[Error] CompileScript: {ex.Message}", Brushes.Red);
             }
         }
@@ -414,7 +460,7 @@ namespace ProtoTestTool
 
         private System.Reflection.Assembly? _scriptAssembly;
 
-        private async Task CompileScriptAsync()
+        private async Task CompileScriptAsync(Action<string>? logger = null)
         {
             ScriptLogBox.Text = "스크립트 체인 컴파일 중... (Compiling)";
             ScriptLogBox.Foreground = Brushes.White;
@@ -428,14 +474,14 @@ namespace ProtoTestTool
                 if (!File.Exists(regPath)) throw new FileNotFoundException("PacketRegistry.csx 없음");
 
                 ScriptLogBox.Text += "\nPacket Registry 컴파일 중...";
-                var regDllPath = await _scriptLoader.CompileToDllAsync(regPath, null);
+                var regDllPath = await _scriptLoader.CompileToDllAsync(regPath, null, logger);
 
                 // 2. Compile Serializer
                 var serPath = Path.Combine(dir, "PacketSerializer.csx");
                 if (!File.Exists(serPath)) throw new FileNotFoundException("PacketSerializer.csx 없음");
 
                 ScriptLogBox.Text += "\nPacket Serializer 컴파일 중...";
-                var serDllPath = await _scriptLoader.CompileToDllAsync(serPath, null);
+                var serDllPath = await _scriptLoader.CompileToDllAsync(serPath, null, logger);
 
                 // 3. Compile Context (User Logic)
                 var mainPath = Path.Combine(dir, "PacketHandler.csx");
@@ -491,15 +537,15 @@ namespace ProtoTestTool
                 // Ensure StateStore exists
                 if (_scriptState == null) _scriptState = new ScriptStateStore();
 
-                var logger = new ToolScriptLogger((msg, color) => { Dispatcher.Invoke(() => AppendLog(msg, color)); });
+                var toolLogger = new ToolScriptLogger((msg, color) => { Dispatcher.Invoke(() => AppendLog(msg, color)); });
                 var clientApi = new ToolClientApi(this);
 
-                ScriptGlobals.Initialize(_scriptState, logger);
+                ScriptGlobals.Initialize(_scriptState, toolLogger);
                 ScriptGlobals.SetApis(clientApi, null); // ProxyApi not yet implemented globally
                 ScriptGlobals.SetServices(registry, codec);
 
                 // Load User Logic
-                var contextAssembly = await _scriptLoader.LoadScriptWithReferencesAsync(buildPath, protoRefs);
+                var contextAssembly = await _scriptLoader.LoadScriptWithReferencesAsync(buildPath, protoRefs, logger);
                 _scriptAssembly = contextAssembly;
 
                 // Find Interceptors
@@ -975,6 +1021,7 @@ public class MyInterceptor : IProxyPacketInterceptor
             }
         }
 
+        
         private Task StartProxyServerAsync(int localPort, string targetIp, int targetPort)
         {
             return Task.Run(() =>

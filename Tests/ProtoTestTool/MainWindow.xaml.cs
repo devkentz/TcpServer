@@ -8,6 +8,7 @@ using ProtoTestTool.Network;
 using ProtoTestTool.ScriptContract;
 using RoslynPad.Editor;
 using System.Collections.ObjectModel;
+using Google.Protobuf;
 using ProtoTestTool.Roslyn;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
@@ -244,8 +245,8 @@ namespace ProtoTestTool
 
                 var json = JsonEditor.Text;
 
-                var message = JsonConvert.DeserializeObject(json, type);
-                if (message == null) return;
+                if (JsonConvert.DeserializeObject(json, type) is not IMessage message) 
+                    return;
 
                 // Client Interceptor Hook
                 if (_clientInterceptor != null)
@@ -281,7 +282,7 @@ namespace ProtoTestTool
                 }
 
                 var bytes = ScriptGlobals.Codec.Encode(message);
-                _client.SendAsync(bytes.ToArray());
+                _client.SendAsync(bytes.Span);
 
                 AppendLog($"[Send] {message.GetType().Name} ({bytes.Length} bytes)", Brushes.White);
             }
@@ -292,7 +293,7 @@ namespace ProtoTestTool
             }
         }
 
-        public void SendPacket(object message)
+        public void SendPacket(IMessage message)
         {
             if (_client == null || !_client.IsConnected)
             {

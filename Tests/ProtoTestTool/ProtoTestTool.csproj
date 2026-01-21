@@ -9,6 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Dotnet.Script.Core" />
+    <PackageReference Include="Dotnet.Script.DependencyModel" />
+    <PackageReference Include="Dotnet.Script.DependencyModel.Nuget" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" />
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="Microsoft.Data.Sqlite" />

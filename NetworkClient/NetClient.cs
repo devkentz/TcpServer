@@ -66,7 +66,7 @@ namespace NetworkClient
         public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default, int timeoutMs = 15_000)
         {
             _connectTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            
+
             using var timeoutCts = new CancellationTokenSource(timeoutMs);
 
             try
@@ -193,11 +193,20 @@ namespace NetworkClient
         {
             var size = (header, message).CalcSize();
             var buffer = ArrayPool<byte>.Shared.Rent(size);
-
-            (header, message).WriteToSpan(buffer);
-            //_sendQueue.Enqueue((buffer, size));
-
-            base.SendAsync(buffer, 0, size);
+            try
+            {
+                (header, message).WriteToSpan(buffer);
+                //_sendQueue.Enqueue((buffer, size));
+                base.SendAsync(buffer, 0, size);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error writing message to client");
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
 
         protected override void OnConnected()
@@ -211,7 +220,7 @@ namespace NetworkClient
         protected override void OnDisconnected()
         {
             _logger.LogInformation("TCP client disconnected - [sid:{Sid}]", Sid);
-            
+
 
             _connectTcs?.SetCanceled();
         }
@@ -220,7 +229,7 @@ namespace NetworkClient
         {
             _logger.LogInformation("error - {error} [sid:{Sid}]", error, Sid);
         }
-        
+
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
             try

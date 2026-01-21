@@ -1,5 +1,7 @@
 using System;
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
+using Google.Protobuf;
 
 namespace ProtoTestTool.ScriptContract
 {
@@ -15,13 +17,14 @@ namespace ProtoTestTool.ScriptContract
         /// <param name="buffer">The incoming sequence of bytes.</param>
         /// <param name="message">The decoded message object (e.g. Google.Protobuf.IMessage).</param>
         /// <returns>True if a message was successfully decoded and consumed from the buffer.</returns>
-        bool TryDecode(ref ReadOnlySequence<byte> buffer, out object? message);
+        bool TryDecode(ref ReadOnlySequence<byte> buffer, [NotNullWhen(true)] out IPacket? message);
 
         /// <summary>
         /// Encodes a message object into a byte array (including framing/length-prefix).
         /// </summary>
         /// <param name="message">The message object to encode.</param>
         /// <returns>The raw bytes to send over the wire.</returns>
-        ReadOnlyMemory<byte> Encode(object message);
-    } 
+        ReadOnlyMemory<byte> Encode(IMessage message);
+        ReadOnlyMemory<byte> Encode(IPacket packet);
+    }
 }

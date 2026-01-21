@@ -21,6 +21,9 @@ namespace Network.Server.Front.Core
                     break;
 
                 int totalSize = BinaryPrimitives.ReadInt32LittleEndian(span);
+                if(totalSize < 0)
+                    throw new Exception("Invalid packet size");
+                
                 if (buffer.WrittenCount < totalSize)
                     break;
 

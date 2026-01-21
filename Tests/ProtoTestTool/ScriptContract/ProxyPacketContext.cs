@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Google.Protobuf;
 
 namespace ProtoTestTool.ScriptContract
 {
@@ -11,7 +12,7 @@ namespace ProtoTestTool.ScriptContract
         /// <summary>
         /// The decoded message object.
         /// </summary>
-        public object? Message { get; set; }
+        public IPacket Packet { get; set; }
 
         /// <summary>
         /// The direction of the packet flow (Inbound = Client->Server, Outbound = Server->Client).
@@ -39,9 +40,9 @@ namespace ProtoTestTool.ScriptContract
         // public ISessionContext Client { get; }
         // public ISessionContext Server { get; }
 
-        public ProxyPacketContext(object? message, PacketDirection direction, ReadOnlyMemory<byte> raw)
+        public ProxyPacketContext(IPacket packet, PacketDirection direction, ReadOnlyMemory<byte> raw)
         {
-            Message = message;
+            Packet = packet;
             Direction = direction;
             Raw = raw;
         }
