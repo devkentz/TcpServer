@@ -134,6 +134,6 @@ public static class ProtobufCompressor
             );
         }
 
-        return parser.ParseFrom(decompressBuffer.AsSpan()[.. decodedSize]);
+        return parser.ParseFrom(decompressBuffer.AsSpan(0, decodedSize));
     }
 }

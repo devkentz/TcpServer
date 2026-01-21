@@ -72,7 +72,8 @@ namespace ProtoTestTool
         private DocumentId? _docIdReg;
         private DocumentId? _docIdSer;
         private DocumentId? _docIdCtx;
-        private DocumentId? _docIdHead;
+        private DocumentId? _docIdHeader; // PacketHeader.csx
+
 
         private async Task InitializeRoslynEditorAsync()
         {
@@ -103,21 +104,22 @@ namespace ProtoTestTool
             await ContextEditor.InitializeAsync(_roslynService.Host, new ClassificationHighlightColors(),
                 AppDomain.CurrentDomain.BaseDirectory, _docIdCtx.Id.ToString(), SourceCodeKind.Script);
 
-            // 4. Request Headers Script
-            _docIdHead = _roslynService.Host.AddDocument(new DocumentCreationArgs(
-                new StringTextSource("// Headers Script"), "Headers.csx", SourceCodeKind.Script)
+            // 4. Packet Header
+            _docIdHeader = _roslynService.Host.AddDocument(new DocumentCreationArgs(
+                new StringTextSource("// Loading Header..."), "PacketHeader.csx", SourceCodeKind.Script)
             {
                 WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
             });
-            await HeaderScriptEditor.InitializeAsync(_roslynService.Host, new ClassificationHighlightColors(),
-                AppDomain.CurrentDomain.BaseDirectory, _docIdHead.Id.ToString(), SourceCodeKind.Script);
-            HeaderScriptEditor.Text = "// Headers[\"Authorization\"] = \"Bearer token\";\n";
+            await HeaderEditor.InitializeAsync(_roslynService.Host, new ClassificationHighlightColors(),
+                AppDomain.CurrentDomain.BaseDirectory, _docIdHeader.Id.ToString(), SourceCodeKind.Script);
+
+            HeaderEditor.Text = "// Headers[\"Authorization\"] = \"Bearer token\";\n";
 
             // Load Files or Defaults
             await LoadRegistryAsync();
+            await LoadHeaderAsync();
             await LoadSerializerAsync();
             await LoadContextAsync();
-            await LoadHeaderScriptAsync();
         }
 
         private async Task<string?> LoadScriptAsync(string fileName)
@@ -137,9 +139,11 @@ namespace ProtoTestTool
             // For now, simple direct write to Default Paths to avoid dialog hell.
 
             await File.WriteAllTextAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketRegistry.csx"), RegistryEditor.Text);
+            await File.WriteAllTextAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketRegistry.csx"), RegistryEditor.Text);
+            await File.WriteAllTextAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketHeader.csx"), HeaderEditor.Text);
             await File.WriteAllTextAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketSerializer.csx"), SerializerEditor.Text);
             await File.WriteAllTextAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketHandler.csx"), ContextEditor.Text);
-            await File.WriteAllTextAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Headers.csx"), HeaderScriptEditor.Text);
+
         }
 
         private async Task LoadRegistryAsync()
@@ -147,6 +151,13 @@ namespace ProtoTestTool
             var code = await LoadScriptAsync("PacketRegistry.csx");
             if (string.IsNullOrWhiteSpace(code)) code = GetDefaultTemplate("PacketRegistry");
             RegistryEditor.Text = code;
+        }
+
+        private async Task LoadHeaderAsync()
+        {
+            var code = await LoadScriptAsync("PacketHeader.csx");
+            if (string.IsNullOrWhiteSpace(code)) code = GetDefaultTemplate("PacketHeader");
+            HeaderEditor.Text = code;
         }
 
         private async Task LoadSerializerAsync()
@@ -163,12 +174,7 @@ namespace ProtoTestTool
             ContextEditor.Text = code;
         }
 
-        private async Task LoadHeaderScriptAsync()
-        {
-            var code = await LoadScriptAsync("Headers.csx");
-            if (string.IsNullOrWhiteSpace(code)) code = "// Headers[\"Authorization\"] = \"Bearer token\";\n";
-            HeaderScriptEditor.Text = code;
-        }
+
 
         class StringTextSource : SourceTextContainer
         {
@@ -350,6 +356,11 @@ namespace ProtoTestTool
                     editor = ContextEditor;
                     defaultName = "PacketHandler.csx";
                 }
+                else if (header.Contains("Packet Header"))
+                {
+                    editor = HeaderEditor;
+                    defaultName = "PacketHeader.csx";
+                }
 
                 if (editor != null)
                 {
@@ -385,69 +396,8 @@ namespace ProtoTestTool
                     });
                 };
 
-                 if (header.Contains("Packet Registry") || header.Contains("Packet Serializer"))
-                {
-                    // Validate only the current code
-                    bool isRegistry = header.Contains("Packet Registry");
-                    string code = isRegistry ? RegistryEditor.Text : SerializerEditor.Text;
-                    string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, isRegistry ? "PacketRegistry.csx" : "PacketSerializer.csx");
-                    string regDllPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketRegistry.dll");
-                    
-                    ScriptLogBox.Text = $"검증 중 (Validating)...";
-                    ScriptLogBox.Foreground = Brushes.White;
-
-                    await Task.Run(() =>
-                    {
-                        var extraRefs = new List<string>();
-                        if (header.Contains("Packet Serializer") && File.Exists(regDllPath)) 
-                        {
-                            extraRefs.Add(regDllPath);
-                        }
-
-                        var (diagnostics, resolvedRefs) = _scriptLoader.ValidateScript(code, filePath, uiLogger, extraRefs);
-                        
-                        // Update Editor References
-                        if (resolvedRefs != null && _roslynService != null)
-                        {
-                            var targetDocId = isRegistry ? _docIdReg : _docIdSer;
-                            if (targetDocId != null)
-                            {
-                                // Dispatch to UI thread if RoslynHost requires it? No, Workspace updates are thread safe usually.
-                                // But let's be safe or just call it.
-                                foreach (var refPath in resolvedRefs)
-                                {
-                                     _roslynService.AddReference(targetDocId, refPath);
-                                }
-                                foreach (var extra in extraRefs)
-                                {
-                                    _roslynService.AddReference(targetDocId, extra);
-                                }
-                            }
-                        }
-
-                        var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-
-                        Dispatcher.Invoke(() =>
-                        {
-                            if (errors.Count > 0)
-                            {
-                                var errorMsg = string.Join(Environment.NewLine, errors.Select(d => $"Line {d.Location.GetLineSpan().StartLinePosition.Line + 1}: {d.GetMessage()}"));
-                                ScriptLogBox.Text += $"\n[{DateTime.Now:HH:mm:ss}] 검증 실패 (Validation Failed):\n{errorMsg}";
-                                ScriptLogBox.Foreground = Brushes.Red;
-                            }
-                            else
-                            {
-                                ScriptLogBox.Text += $"\n[{DateTime.Now:HH:mm:ss}] 검증 성공 (Validation Success)!";
-                                ScriptLogBox.Foreground = Brushes.DeepSkyBlue;
-                            }
-                        });
-                    });
-                }
-                else
-                {
-                    // For Context, we run the full compilation (Integration Test)
-                    await CompileScriptAsync(uiLogger);
-                }
+                // Always run full compilation (Regression: Validation-only mode caused missing reference issues)
+                await CompileScriptAsync(uiLogger);
             }
             catch (Exception ex)
             {
@@ -459,6 +409,7 @@ namespace ProtoTestTool
 
 
         private System.Reflection.Assembly? _scriptAssembly;
+        private System.Reflection.Assembly? _headerAssembly;
 
         private async Task CompileScriptAsync(Action<string>? logger = null)
         {
@@ -476,12 +427,24 @@ namespace ProtoTestTool
                 ScriptLogBox.Text += "\nPacket Registry 컴파일 중...";
                 var regDllPath = await _scriptLoader.CompileToDllAsync(regPath, null, logger);
 
+                // 1.5 Compile Header
+                var headerPath = Path.Combine(dir, "PacketHeader.csx");
+                string headerDllPath = "";
+                if (File.Exists(headerPath))
+                {
+                     ScriptLogBox.Text += "\nPacket Header 컴파일 중...";
+                     headerDllPath = await _scriptLoader.CompileToDllAsync(headerPath, new [] { regDllPath }, logger);
+                }
+
                 // 2. Compile Serializer
                 var serPath = Path.Combine(dir, "PacketSerializer.csx");
                 if (!File.Exists(serPath)) throw new FileNotFoundException("PacketSerializer.csx 없음");
 
                 ScriptLogBox.Text += "\nPacket Serializer 컴파일 중...";
-                var serDllPath = await _scriptLoader.CompileToDllAsync(serPath, null, logger);
+                var serRefs = new List<string> { regDllPath };
+                if (!string.IsNullOrEmpty(headerDllPath)) serRefs.Add(headerDllPath);
+                
+                var serDllPath = await _scriptLoader.CompileToDllAsync(serPath, serRefs, logger);
 
                 // 3. Compile Context (User Logic)
                 var mainPath = Path.Combine(dir, "PacketHandler.csx");
@@ -504,6 +467,7 @@ namespace ProtoTestTool
                 // Collect References
                 var protoGenDir = Path.Combine(dir, "ProtoGen");
                 var protoRefs = new List<string> {regDllPath, serDllPath};
+                if (!string.IsNullOrEmpty(headerDllPath)) protoRefs.Add(headerDllPath);
 
                 if (Directory.Exists(protoGenDir))
                 {
@@ -547,6 +511,11 @@ namespace ProtoTestTool
                 // Load User Logic
                 var contextAssembly = await _scriptLoader.LoadScriptWithReferencesAsync(buildPath, protoRefs, logger);
                 _scriptAssembly = contextAssembly;
+
+                if (!string.IsNullOrEmpty(headerDllPath))
+                {
+                    _headerAssembly = System.Reflection.Assembly.LoadFrom(headerDllPath);
+                }
 
                 // Find Interceptors
                 var clientInterceptorType = _scriptAssembly.GetTypes().FirstOrDefault(t => typeof(IClientPacketInterceptor).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
@@ -606,6 +575,10 @@ namespace ProtoTestTool
                 {
                     RegistryEditor.Text = cls.ToFullString();
                 }
+                else if (IsImplementationOf(cls, "IHeader") || cls.Identifier.Text.Contains("Header"))
+                {
+                    HeaderEditor.Text = cls.ToFullString();
+                }
                 else if (IsImplementationOf(cls, "IPacketSerializer") || cls.Identifier.Text.Contains("Serializer"))
                 {
                     SerializerEditor.Text = cls.ToFullString();
@@ -648,6 +621,22 @@ public class PacketRegistry : IPacketRegistry
     public Type? GetMessageType(int id) => _idToType.TryGetValue(id, out var type) ? type : null;
 
     public int GetMessageId(Type type) => _typeToId.TryGetValue(type, out var id) ? id : 0;
+    public int GetMessageId(Type type) => _typeToId.TryGetValue(type, out var id) ? id : 0;
+}",
+                "PacketHeader" =>
+                    @"using System;
+using Newtonsoft.Json;
+using ProtoTestTool.ScriptContract;
+
+public class Header : IHeader
+{
+    public int MsgId { get; set; }
+    public byte Flags { get; set; }
+    
+    public string ToJsonString()
+    {
+        return JsonConvert.SerializeObject(this);
+    }
 }",
                 "PacketSerializer" =>
                     @"using System;

@@ -12,7 +12,7 @@ namespace ProtoTestTool.ScriptContract
         /// <summary>
         /// The decoded message object.
         /// </summary>
-        public IPacket Packet { get; set; }
+        public Packet Packet { get; set; }
 
         /// <summary>
         /// The direction of the packet flow (Inbound = Client->Server, Outbound = Server->Client).
@@ -40,7 +40,7 @@ namespace ProtoTestTool.ScriptContract
         // public ISessionContext Client { get; }
         // public ISessionContext Server { get; }
 
-        public ProxyPacketContext(IPacket packet, PacketDirection direction, ReadOnlyMemory<byte> raw)
+        public ProxyPacketContext(Packet packet, PacketDirection direction, ReadOnlyMemory<byte> raw)
         {
             Packet = packet;
             Direction = direction;

@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -6,12 +5,10 @@ using System.IO;
 using Newtonsoft.Json;
 using ProtoTestTool.Network;
 using ProtoTestTool.ScriptContract;
-using RoslynPad.Editor;
 using System.Collections.ObjectModel;
 using Google.Protobuf;
 using ProtoTestTool.Roslyn;
-using Microsoft.CodeAnalysis.CSharp.Scripting;
-using Microsoft.CodeAnalysis.Scripting;
+
 
 namespace ProtoTestTool
 {
@@ -186,6 +183,38 @@ namespace ProtoTestTool
                 
                 _currentEditingFile = convertor.Name; 
 
+                // Generate Default JSON for Header
+                if (_headerAssembly != null)
+                {
+                    var headerType = _headerAssembly.GetTypes().FirstOrDefault(t => typeof(IHeader).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
+                    if (headerType == null) headerType = _headerAssembly.GetTypes().FirstOrDefault(t => t.Name == "Header");
+
+                    if (headerType != null)
+                    {
+                        try
+                        {
+                            var headerInstance = Activator.CreateInstance(headerType);
+                            var headerJson = JsonConvert.SerializeObject(headerInstance, Formatting.Indented);
+                            HeaderJsonEditor.Text = headerJson;
+                            AppendLog($"[Debug] Generated Header JSON ({headerJson.Length} chars)", Brushes.Gray);
+                        }
+                        catch (Exception ex)
+                        {
+                            HeaderJsonEditor.Text = "{}";
+                            AppendLog($"[Error] Header Serialization Failed: {ex.Message}", Brushes.Red);
+                        }
+                    }
+                    else
+                    {
+                        HeaderJsonEditor.Text = "{}";
+                        AppendLog($"[Warning] 'Header' type not found in assembly.", Brushes.Orange);
+                    }
+                }
+                else
+                {
+                    HeaderJsonEditor.Text = "{}";
+                } 
+
                 // Display Proto Source
                 try
                 {
@@ -222,8 +251,8 @@ namespace ProtoTestTool
             }
         }
         
-        private void SendBtn_Click(object sender, RoutedEventArgs e) => _ = SendBtn_ClickAsync();
-        private async Task SendBtn_ClickAsync()
+        private void SendBtn_Click(object sender, RoutedEventArgs e) => SendBtn_ClickAsync();
+        private void SendBtn_ClickAsync()
         {
             try
             {
@@ -253,35 +282,55 @@ namespace ProtoTestTool
                 {
                     var ctx = new ClientPacketContext(message);
 
-                    // Header Script Execution
-                    var headerCode = HeaderScriptEditor.Text;
-                    if (!string.IsNullOrWhiteSpace(headerCode))
-                    {
-                        try
-                        {
-                            var globals = new HeaderScriptGlobals { Headers = ctx.Headers };
-                            var options = ScriptOptions.Default
-                                .AddImports("System", "System.Collections.Generic");
 
-                            await CSharpScript.EvaluateAsync(headerCode, options, globals);
-                        }
-                        catch (CompilationErrorException cex)
-                        {
-                             AppendLog($"[Header Script Error] {string.Join(", ", cex.Diagnostics)}", Brushes.Red);
-                             return;
-                        }
-                        catch (Exception ex)
-                        {
-                             AppendLog($"[Header Script Error] {ex.Message}", Brushes.Red);
-                             return;
-                        }
-                    }
 
                     _clientInterceptor.OnBeforeSend(ctx);
                     message = ctx.Message;
                 }
+                
+                // Find Header Type
+                Type? headerType = null;
+                // MainWindow.Scripting.cs should expose _headerAssembly or we access it via reflection/event
+                // But _headerAssembly is private in MainWindow block.
+                // We are in the same partial class 'MainWindow'.
+                // verifying _headerAssembly visibility. It was added as 'private' in MainWindow.Scripting.cs (partial).
+                // Private fields in partial classes are shared across files.
+                
+                if (_headerAssembly != null)
+                {
+                     headerType = _headerAssembly.GetTypes().FirstOrDefault(t => typeof(IHeader).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
+                     if (headerType == null) headerType = _headerAssembly.GetTypes().FirstOrDefault(t => t.Name == "Header");
+                }
 
-                var bytes = ScriptGlobals.Codec.Encode(message);
+                if (headerType == null)
+                {
+                    AppendLog("PacketHeader.csx has not been compiled or Header class not found.", Brushes.Red);
+                    return;
+                }
+
+                // Header JSON to Object
+                IHeader? headerObj = null;
+                try 
+                {
+                    // Use HeaderJsonEditor.Text
+                    headerObj = (IHeader?)JsonConvert.DeserializeObject(HeaderJsonEditor.Text, headerType);
+                }
+                catch(Exception ex)
+                {
+                    AppendLog($"Header JSON Error: {ex.Message}", Brushes.Red);
+                    return;
+                }
+
+                if (headerObj == null)
+                {
+                    AppendLog("Header object is null.", Brushes.Red);
+                    return;
+                }
+
+                var packet = new Packet(headerObj, message);
+
+                // Encode & Send
+                var bytes = ScriptGlobals.Codec.Encode(packet);
                 _client.SendAsync(bytes.Span);
 
                 AppendLog($"[Send] {message.GetType().Name} ({bytes.Length} bytes)", Brushes.White);
@@ -293,7 +342,7 @@ namespace ProtoTestTool
             }
         }
 
-        public void SendPacket(IMessage message)
+        public void SendPacket(IHeader header, IMessage message)
         {
             if (_client == null || !_client.IsConnected)
             {
@@ -317,7 +366,7 @@ namespace ProtoTestTool
                     message = ctx.Message;
                 }
 
-                var bytes = ScriptGlobals.Codec.Encode(message);
+                var bytes = ScriptGlobals.Codec.Encode(new Packet(header, message));
                 _client.SendAsync(bytes.ToArray());
                 AppendLog($"[Send] {message.GetType().Name} ({bytes.Length} bytes)");
             }
@@ -391,4 +440,4 @@ namespace ProtoTestTool
             LogBox.ScrollToEnd();
         }
     }
-}
+}           

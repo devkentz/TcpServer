@@ -60,15 +60,21 @@ namespace ProtoTestTool
             public List<string> References { get; set; } = new List<string>();
         }
 
-        private PreProcessResult PreProcess(string code, string scriptPath)
+        private PreProcessResult PreProcess(string code, string scriptPath, Action<string>? logger = null)
         {
             var result = new PreProcessResult { Code = code };
             
             // Check for #r "nuget:..."
             var lines = code.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
             var nugetLines = lines.Where(l => l.TrimStart().StartsWith("#r \"nuget:", StringComparison.OrdinalIgnoreCase)).ToList();
+            var loadLines = lines.Where(l => l.TrimStart().StartsWith("#load", StringComparison.OrdinalIgnoreCase)).ToList();
 
-            if (nugetLines.Any())
+            if (logger != null && (nugetLines.Any() || loadLines.Any()))
+            {
+                logger($"[PreProcess] Found {nugetLines.Count} nuget refs, {loadLines.Count} load directives in {Path.GetFileName(scriptPath)}");
+            }
+
+            if (nugetLines.Any() || loadLines.Any())
             {
                 // Comment out nuget lines in the code to satisfy Roslyn
                 var sb = new StringBuilder();
@@ -77,6 +83,10 @@ namespace ProtoTestTool
                     if (line.TrimStart().StartsWith("#r \"nuget:", StringComparison.OrdinalIgnoreCase))
                     {
                         sb.AppendLine($"// {line}"); // Comment out
+                    }
+                    else if (line.TrimStart().StartsWith("#load", StringComparison.OrdinalIgnoreCase))
+                    {
+                        sb.AppendLine($"// {line}"); // Comment out load directives to prevent double loading
                     }
                     else
                     {
@@ -99,20 +109,33 @@ namespace ProtoTestTool
                 {
                     File.WriteAllText(tempCsx, code); // Write ORIGINAL code with #r nuget
 
-                    var loggerFactory = new Dotnet.Script.DependencyModel.Logging.LogFactory(type => (level, message, exception) => System.Diagnostics.Debug.WriteLine($"[{level}] {message}"));
+                    var loggerFactory = new Dotnet.Script.DependencyModel.Logging.LogFactory(type => (level, message, exception) => 
+                    {
+                        var msg = $"[{level}] {message}";
+                        System.Diagnostics.Debug.WriteLine(msg);
+                        logger?.Invoke(msg);
+                    });
                     var resolver = new Dotnet.Script.DependencyModel.Runtime.RuntimeDependencyResolver(loggerFactory, true);
                     
                     var dependencies = resolver.GetDependencies(tempCsx, Array.Empty<string>());
+                    int count = 0;
                     foreach (dynamic dep in dependencies)
                     {
-                        foreach (string refPath in dep.AssemblyPaths)
+                        // AssemblyPaths property does not exist on RuntimeDependency.
+                        // We must iterate 'Assemblies' (RuntimeAssembly) and access 'Path'.
+                        foreach (dynamic asm in dep.Assemblies)
                         {
+                             var refPath = (string)asm.Path;
                              result.References.Add(refPath);
+                             logger?.Invoke($"Resolved: {Path.GetFileName(refPath)}");
+                             count++;
                         }
                     }
+                    logger?.Invoke($"Total resolved references: {count}");
                 }
                 catch (Exception ex)
                 {
+                     logger?.Invoke($"[Error] NuGet resolution failed: {ex.Message}");
                      System.Diagnostics.Debug.WriteLine($"NuGet resolution failed: {ex.Message}");
                 }
                 finally
@@ -184,7 +207,9 @@ namespace ProtoTestTool
             // This allows PacketRegistry types to be visible to PacketSerializer.
             var parseOptions = new CSharpParseOptions(LanguageVersion.Latest, DocumentationMode.Parse, SourceCodeKind.Regular);
             var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, parseOptions, scriptPath);
-            var assemblyName = Path.GetFileNameWithoutExtension(scriptPath);
+            // Use unique assembly name to avoid 'Assembly with same name is already loaded' error
+            // when loading multiple versions of the same script in the default context.
+            var assemblyName = $"{Path.GetFileNameWithoutExtension(scriptPath)}_{randomId}";
             var references = options.MetadataReferences;
 
             CSharpCompilation compilation = CSharpCompilation.Create(
@@ -252,100 +277,6 @@ namespace ProtoTestTool
              return Task.FromResult(assembly);
         }
 
-        private PreProcessResult PreProcess(string code, string scriptPath, Action<string>? logger = null)
-        {
-            var result = new PreProcessResult { Code = code };
-            
-            var lines = code.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-            var nugetLines = lines.Where(l => l.TrimStart().StartsWith("#r \"nuget:", StringComparison.OrdinalIgnoreCase)).ToList();
 
-            if (nugetLines.Any())
-            {
-                logger?.Invoke($"Found {nugetLines.Count} NuGet references. Resolving...");
-
-                var sb = new StringBuilder();
-                foreach (var line in lines)
-                {
-                    if (line.TrimStart().StartsWith("#r \"nuget:", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sb.AppendLine($"// {line}"); 
-                    }
-                    else
-                    {
-                        sb.AppendLine(line);
-                    }
-                }
-                result.Code = sb.ToString();
-
-                var tempFile = Path.GetTempFileName();
-                var tempCsx = Path.ChangeExtension(tempFile, ".csx");
-                File.Move(tempFile, tempCsx);
-
-                try
-                {
-                    File.WriteAllText(tempCsx, code);
-
-                    var loggerFactory = new Dotnet.Script.DependencyModel.Logging.LogFactory(type => (level, message, exception) => 
-                    {
-                        var msg = $"[{level}] {message}";
-                        System.Diagnostics.Debug.WriteLine(msg);
-                        logger?.Invoke(msg);
-                    });
-                    
-                    var resolver = new Dotnet.Script.DependencyModel.Runtime.RuntimeDependencyResolver(loggerFactory, true);
-                    
-                    var dependencies = resolver.GetDependencies(tempCsx, Array.Empty<string>());
-                    int count = 0;
-                    foreach (dynamic dep in dependencies)
-                    {
-                        try 
-                        {
-                            // 'Assemblies' contains RuntimeAssembly objects
-                            foreach (dynamic asm in dep.Assemblies)
-                            {
-                                 try
-                                 {
-                                     string refPath = asm.Path;
-                                     result.References.Add(refPath);
-                                     logger?.Invoke($"Resolved: {Path.GetFileName(refPath)}");
-                                     count++;
-                                 }
-                                 catch (Exception ex)
-                                 {
-                                     // Fallback or debug
-                                     logger?.Invoke($"[Error] Could not read Path from assembly object: {ex.Message}");
-                                     logger?.Invoke($"Assembly Object Properties:");
-                                     foreach (var prop in ((object)asm).GetType().GetProperties())
-                                     {
-                                         logger?.Invoke($" - {prop.Name} ({prop.PropertyType.Name})");
-                                     }
-                                 }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            logger?.Invoke($"[Error] Error iterating dependencies: {ex.Message}");
-                            // Dump dependency properties just in case
-                             foreach (var prop in ((object)dep).GetType().GetProperties())
-                             {
-                                 logger?.Invoke($" - Dep Property: {prop.Name}");
-                             }
-                        }
-                    }
-                    logger?.Invoke($"Total resolved references: {count}");
-                }
-                catch (Exception ex)
-                {
-                     logger?.Invoke($"[Error] NuGet resolution failed: {ex.Message}");
-                     System.Diagnostics.Debug.WriteLine($"NuGet resolution failed: {ex.Message}");
-                }
-                finally
-                {
-                    if (File.Exists(tempCsx)) File.Delete(tempCsx);
-                }
-            }
-
-            return result;
-        }
     }
 }

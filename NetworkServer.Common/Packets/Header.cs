@@ -90,11 +90,9 @@ public static class PacketExtensions
         int offset = 0;
 
         // PacketSize
-        BinaryPrimitives.WriteInt32LittleEndian(buffer[offset..], packetSize);
+        //BinaryPrimitives.WriteInt32LittleEndian(buffer[offset..], packetSize);
         offset += 4;
         
-        Console.WriteLine();
-
         // flags
         buffer[offset] = (byte) packet.header.Flags;
         offset += 1;
@@ -114,20 +112,23 @@ public static class PacketExtensions
         }
         
         // payload
+        var headerSize = packet.header.GetSize();
         int payloadSize = packetSize - packet.header.GetSize();
 
         if (packet.header.IsCompressed)
         {
-            ProtobufCompressor.Compress(packet.message, buffer.Slice(offset + sizeof(int), payloadSize));
-            
-            BinaryPrimitives.WriteInt32LittleEndian(buffer[offset..], payloadSize);
+            var compressSize = ProtobufCompressor.Compress(packet.message, buffer.Slice(offset + sizeof(int), payloadSize));
+            BinaryPrimitives.WriteInt32LittleEndian(buffer[offset..], payloadSize); //original-size
             offset += 4;
+            
+            BinaryPrimitives.WriteInt32LittleEndian(buffer[0..], compressSize + headerSize);
         }
-        
         else
         {
             packet.message.WriteTo(buffer.Slice(offset, payloadSize));
             offset += payloadSize;
+            
+            BinaryPrimitives.WriteInt32LittleEndian(buffer[0..], packetSize);
         }
 
         return offset;

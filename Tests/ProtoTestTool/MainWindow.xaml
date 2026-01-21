@@ -154,8 +154,8 @@
                              <TabItem Header="Body (JSON)">
                                  <TextBox x:Name="JsonEditor" AcceptsReturn="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" Background="{StaticResource InputBrush}" Foreground="{StaticResource PrimaryTextBrush}" BorderThickness="0"/>
                              </TabItem>
-                             <TabItem Header="Headers (C#)">
-                                 <roslyn:RoslynCodeEditor x:Name="HeaderScriptEditor" FontFamily="Consolas" FontSize="12" ShowLineNumbers="True" Background="White" Foreground="Black"/>
+                             <TabItem Header="Header (JSON)">
+                                 <TextBox x:Name="HeaderJsonEditor" Text="{}" AcceptsReturn="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" Background="{StaticResource InputBrush}" Foreground="{StaticResource PrimaryTextBrush}" BorderThickness="0"/>
                              </TabItem>
                              <TabItem Header="Proto Source">
                                  <roslyn:RoslynCodeEditor x:Name="ProtoSourceViewer" IsReadOnly="True" FontFamily="Consolas" FontSize="12" ShowLineNumbers="True" Background="White" Foreground="Black"/>
@@ -237,6 +237,9 @@
                  <TabControl x:Name="MethodTabs" Grid.Row="1">
                       <TabItem Header="Packet Registry (.csx)">
                           <roslyn:RoslynCodeEditor x:Name="RegistryEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True" Background="White" Foreground="Black"/>
+                      </TabItem>
+                      <TabItem Header="Packet Header (.csx)">
+                           <roslyn:RoslynCodeEditor x:Name="HeaderEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True" Background="White" Foreground="Black"/>
                       </TabItem>
                       <TabItem Header="Packet Serializer (.csx)">
                            <roslyn:RoslynCodeEditor x:Name="SerializerEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True" Background="White" Foreground="Black"/>

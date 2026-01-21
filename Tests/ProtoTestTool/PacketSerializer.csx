@@ -1,7 +1,13 @@
+
+// #load "C:\Work\backup\tcpaop\Tests\ProtoTestTool\bin\Debug\net9.0-windows\PacketHeader.csx"
+// NOTE: PacketHeader.csx is automatically referenced by the compilation pipeline.
+// using #load causes "Same Type, Different Assembly" conflicts.
+
 #r "nuget: K4os.Compression.LZ4, 1.3.8"
 #r "nuget: Microsoft.IO.RecyclableMemoryStream, 3.0.1"
 #r "nuget: Google.Protobuf,3.28.2"
 #r "nuget: System.Memory, 4.5.5"
+#load "PacketHeader.csx"
 
 using System;
 using System.IO;
@@ -12,6 +18,8 @@ using ProtoTestTool.ScriptContract;
 using K4os.Compression.LZ4;
 using Microsoft.IO;
 using Google.Protobuf;
+using System.Diagnostics.CodeAnalysis;
+
 
 public static class PacketDefine
 {
@@ -79,72 +87,6 @@ public static class ProtobufCompressor
     }
 }
 
-[Flags]
-public enum PacketFlags : byte
-{
-    None        = 0,
-    HasError    = 1 << 0, // 0000 0001
-    Compressed  = 1 << 1, // 0000 0010
-    Encrypted   = 1 << 2, // 0000 0100
-}
-
-
-public static class PacketFlagsUtil
-{
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static PacketFlags Add(PacketFlags current, PacketFlags flag)
-        => current | flag;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static PacketFlags Remove(PacketFlags current, PacketFlags flag)
-        => current & ~flag;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool Has(PacketFlags current, PacketFlags flag)
-        => (current & flag) != 0;
-}
-
-
-public class Header
-{
-    public Header(
-        PacketFlags flags = PacketFlags.None,
-        int msgId = 0,
-        ushort msgSeq = 0,
-        ushort errorCode = 0,
-        int originalSize = 0)
-    {
-        Flags = flags;
-        MsgId = msgId;
-        MsgSeq = msgSeq;
-        ErrorCode = errorCode;
-        OriginalSize = originalSize;
-    }
-
-    public PacketFlags Flags { get; set; }
-    public int MsgId { get; set; }
-    public ushort MsgSeq { get; set; }
-    public ushort ErrorCode { get; set; }
-    public int OriginalSize { get; set; }
-
-    private const int FixedSize =
-          sizeof(int)    // packet size
-        + sizeof(byte)   // flags
-        + sizeof(int)    // msgId
-        + sizeof(ushort);// msgSeq
-
-    public int GetSize()
-    {
-        return FixedSize
-             + (HasError ? sizeof(ushort) : 0)
-             + (IsCompressed ? sizeof(int) : 0);
-    }
-
-    public bool HasError     => PacketFlagsUtil.Has(Flags, PacketFlags.HasError);
-    public bool IsCompressed => PacketFlagsUtil.Has(Flags, PacketFlags.Compressed);
-    public bool IsEncrypted  => PacketFlagsUtil.Has(Flags, PacketFlags.Encrypted);
-}
-
 
 public static class PacketUtil
 {
@@ -162,8 +104,6 @@ public static class PacketUtil
     
         packetSize = packetSize > 0 ? packetSize : CalcSize(header, message);
 
-        ScriptGlobals.Log.Info($"packetSize : {packetSize}");
-
         var buffer = new byte[packetSize];
 
         if (packetSize > PacketDefine.MaxPacketSize)
@@ -175,10 +115,6 @@ public static class PacketUtil
         BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(offset), packetSize);
         offset += 4;
         
-        
-        ScriptGlobals.Log.Info($"test : " + BitConverter.ToString(buffer));
-
-
         // flags
         buffer[offset++] = (byte)header.Flags;
 
@@ -222,7 +158,7 @@ public class PacketCodec : IPacketCodec
     // Default: 4-byte Length + Payload
     // Format: [Length(4)][MsgId(4)][Payload...]
     
-    public bool TryDecode(ref ReadOnlySequence<byte> buffer, out object? message)
+    public bool TryDecode(ref ReadOnlySequence<byte> buffer, [NotNullWhen(true)] out Packet? message)
     {
         message = null;
         if (buffer.Length < 4) return false;
@@ -250,18 +186,14 @@ public class PacketCodec : IPacketCodec
         }
 
         // Return raw wrapper for now or implement ProtoParser call
-        message = new { RawSize = len, Data = payloadSeq.ToArray() };
-
+        //message = new { RawSize = len, Data = payloadSeq.ToArray() };
+        
         buffer = buffer.Slice(4 + len);
         return true;
     }
 
-    public ReadOnlyMemory<byte> Encode(object message)
+    public ReadOnlyMemory<byte> Encode(Packet packet)
     {
-        ScriptGlobals.Log.Info("hello");
-        var header = new Header(msgId: 100005);
-        var msg = PacketUtil.WriteToSpan(header, (IMessage)message);
-        ScriptGlobals.Log.Info(BitConverter.ToString(msg));
-        return msg;
+        return PacketUtil.WriteToSpan((Header)packet.Header, packet.Message);
     }
 }
