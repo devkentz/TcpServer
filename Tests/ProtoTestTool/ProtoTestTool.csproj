@@ -26,6 +26,7 @@
     <PackageReference Include="RoslynPad.Editor.Windows" />
     <PackageReference Include="RoslynPad.Roslyn" />
     <PackageReference Include="RoslynPad.Roslyn.Windows" />
+    <PackageReference Include="WPF-UI" />
     <PackageReference Include="Grpc.Tools" VersionOverride="2.60.0" PrivateAssets="All" GeneratePathProperty="true" />
   </ItemGroup>
 

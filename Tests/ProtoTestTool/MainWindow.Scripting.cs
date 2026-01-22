@@ -69,382 +69,45 @@ namespace ProtoTestTool
         private IClientPacketInterceptor? _clientInterceptor;
 
         // Document IDs for Reference Updates
-        private DocumentId? _docIdReg;
-        private DocumentId? _docIdSer;
-        private DocumentId? _docIdCtx;
-        private DocumentId? _docIdHeader; // PacketHeader.csx
 
 
-        private async Task InitializeRoslynEditorAsync()
+
+
+
+        public async Task CompileScriptsAsync(string dir, Action<string, Brush> logAction)
         {
-            // 1. Packet Registry
-            _docIdReg = _roslynService.Host.AddDocument(new DocumentCreationArgs(
-                new StringTextSource("// Loading Registry..."), "PacketRegistry.csx", SourceCodeKind.Script)
-            {
-                WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
-            });
-            await RegistryEditor.InitializeAsync(_roslynService.Host, new ClassificationHighlightColors(),
-                AppDomain.CurrentDomain.BaseDirectory, _docIdReg.Id.ToString(), SourceCodeKind.Script);
-
-            // 2. Packet Serializer
-            _docIdSer = _roslynService.Host.AddDocument(new DocumentCreationArgs(
-                new StringTextSource("// Loading Serializer..."), "PacketSerializer.csx", SourceCodeKind.Script)
-            {
-                WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
-            });
-            await SerializerEditor.InitializeAsync(_roslynService.Host, new ClassificationHighlightColors(),
-                AppDomain.CurrentDomain.BaseDirectory, _docIdSer.Id.ToString(), SourceCodeKind.Script);
-
-            // 3. User Logic (Context)
-            _docIdCtx = _roslynService.Host.AddDocument(new DocumentCreationArgs(
-                new StringTextSource("// Loading Logic..."), "PacketHandler.csx", SourceCodeKind.Script)
-            {
-                WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
-            });
-            await ContextEditor.InitializeAsync(_roslynService.Host, new ClassificationHighlightColors(),
-                AppDomain.CurrentDomain.BaseDirectory, _docIdCtx.Id.ToString(), SourceCodeKind.Script);
-
-            // 4. Packet Header
-            _docIdHeader = _roslynService.Host.AddDocument(new DocumentCreationArgs(
-                new StringTextSource("// Loading Header..."), "PacketHeader.csx", SourceCodeKind.Script)
-            {
-                WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
-            });
-            await HeaderEditor.InitializeAsync(_roslynService.Host, new ClassificationHighlightColors(),
-                AppDomain.CurrentDomain.BaseDirectory, _docIdHeader.Id.ToString(), SourceCodeKind.Script);
-
-            HeaderEditor.Text = "// Headers[\"Authorization\"] = \"Bearer token\";\n";
-
-            // Load Files or Defaults
-            await LoadRegistryAsync();
-            await LoadHeaderAsync();
-            await LoadSerializerAsync();
-            await LoadContextAsync();
-        }
-
-        private async Task<string?> LoadScriptAsync(string fileName)
-        {
-            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName);
-            if (File.Exists(path))
-            {
-                return await File.ReadAllTextAsync(path);
-            }
-
-            return null;
-        }
-
-        private async Task SaveAllSilentAsync()
-        {
-            // TODO: Make this truly silent (no dialog if file exists)
-            // For now, simple direct write to Default Paths to avoid dialog hell.
-
-            await File.WriteAllTextAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketRegistry.csx"), RegistryEditor.Text);
-            await File.WriteAllTextAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketRegistry.csx"), RegistryEditor.Text);
-            await File.WriteAllTextAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketHeader.csx"), HeaderEditor.Text);
-            await File.WriteAllTextAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketSerializer.csx"), SerializerEditor.Text);
-            await File.WriteAllTextAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketHandler.csx"), ContextEditor.Text);
-
-        }
-
-        private async Task LoadRegistryAsync()
-        {
-            var code = await LoadScriptAsync("PacketRegistry.csx");
-            if (string.IsNullOrWhiteSpace(code)) code = GetDefaultTemplate("PacketRegistry");
-            RegistryEditor.Text = code;
-        }
-
-        private async Task LoadHeaderAsync()
-        {
-            var code = await LoadScriptAsync("PacketHeader.csx");
-            if (string.IsNullOrWhiteSpace(code)) code = GetDefaultTemplate("PacketHeader");
-            HeaderEditor.Text = code;
-        }
-
-        private async Task LoadSerializerAsync()
-        {
-            var code = await LoadScriptAsync("PacketSerializer.csx");
-            if (string.IsNullOrWhiteSpace(code)) code = GetDefaultTemplate("PacketSerializer");
-            SerializerEditor.Text = code;
-        }
-
-        private async Task LoadContextAsync()
-        {
-            var code = await LoadScriptAsync("PacketHandler.csx");
-            if (string.IsNullOrWhiteSpace(code)) code = GetDefaultTemplate("MyScriptContext");
-            ContextEditor.Text = code;
-        }
-
-
-
-        class StringTextSource : SourceTextContainer
-        {
-            private SourceText _text;
-
-            public StringTextSource(string text)
-            {
-                _text = SourceText.From(text);
-            }
-
-            public override SourceText CurrentText => _text;
-
-            public override event EventHandler<TextChangeEventArgs>? TextChanged
-            {
-                add { }
-                remove { }
-            }
-        }
-
-        #region Script Loading & Editing
-
-        // -- Registry --
-        private void LoadRegistryBtn_Click(object sender, RoutedEventArgs e) => _ = LoadRegistryBtn_ClickAsync();
-        private async Task LoadRegistryBtn_ClickAsync()
-        {
-            try
-            {
-                await LoadRegistryAsync();
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"[Error] {ex.Message}", Brushes.Red);
-            }
-        }
-
-        private void SaveRegistryBtn_Click(object sender, RoutedEventArgs e) => _ = SaveRegistryBtn_ClickAsync();
-        private async Task SaveRegistryBtn_ClickAsync()
-        {
-            try
-            {
-                await SaveEditorToFileAsync(RegistryEditor, "PacketRegistry.csx");
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"[Error] {ex.Message}", Brushes.Red);
-            }
-        }
-
-        // -- Serializer --
-        private void LoadSerializerBtn_Click(object sender, RoutedEventArgs e) => _ = LoadSerializerBtn_ClickAsync();
-        private async Task LoadSerializerBtn_ClickAsync()
-        {
-            try
-            {
-                await LoadSerializerAsync();
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"[Error] {ex.Message}", Brushes.Red);
-            }
-        }
-
-        private void SaveSerializerBtn_Click(object sender, RoutedEventArgs e) => _ = SaveSerializerBtn_ClickAsync();
-        private async Task SaveSerializerBtn_ClickAsync()
-        {
-            try
-            {
-                await SaveEditorToFileAsync(SerializerEditor, "PacketSerializer.csx");
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"[Error] {ex.Message}", Brushes.Red);
-            }
-        }
-
-        // -- Context --
-        private void LoadContextBtn_Click(object sender, RoutedEventArgs e) => _ = LoadContextBtn_ClickAsync();
-        private async Task LoadContextBtn_ClickAsync()
-        {
-            try
-            {
-                await LoadContextAsync();
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"[Error] {ex.Message}", Brushes.Red);
-            }
-        }
-
-        private void SaveContextBtn_Click(object sender, RoutedEventArgs e) => _ = SaveContextBtn_ClickAsync();
-        private async Task SaveContextBtn_ClickAsync()
-        {
-            try
-            {
-                await SaveEditorToFileAsync(ContextEditor, "PacketHandler.csx");
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"[Error] {ex.Message}", Brushes.Red);
-            }
-        }
-
-        private async Task LoadFileToEditorAsync(RoslynPad.Editor.RoslynCodeEditor editor, string defaultName)
-        {
-            var openFileDialog = new Microsoft.Win32.OpenFileDialog
-            {
-                Filter = "C# Script (*.csx)|*.csx|All files (*.*)|*.*",
-                FileName = defaultName,
-                Title = $"Load {defaultName}"
-            };
-
-            if (openFileDialog.ShowDialog() == true)
-            {
-                // Logic to load
-                editor.Text = await File.ReadAllTextAsync(openFileDialog.FileName);
-                ScriptLogBox.Text += $"\nLoaded {Path.GetFileName(openFileDialog.FileName)}.";
-            }
-        }
-
-        private async Task SaveEditorToFileAsync(RoslynPad.Editor.RoslynCodeEditor editor, string defaultName)
-        {
-            var saveFileDialog = new Microsoft.Win32.SaveFileDialog
-            {
-                Filter = "C# Script (*.csx)|*.csx|All files (*.*)|*.*",
-                FileName = defaultName,
-                Title = $"Save {defaultName}"
-            };
-
-            if (saveFileDialog.ShowDialog() == true)
-            {
-                await File.WriteAllTextAsync(saveFileDialog.FileName, editor.Text);
-                ScriptLogBox.Text += $"\nSaved {Path.GetFileName(saveFileDialog.FileName)}.";
-            }
-        }
-
-
-        private void ScriptEditorTab_Selected(object sender, RoutedEventArgs e)
-        {
-            // Maybe refresh files?
-        }
-
-        private void RefreshScriptFileList()
-        {
-            // Optional
-        }
-
-
-        private void LoadFileToEditor(string fileName)
-        {
-            // Deprecated in favor of LoadAllFilesAsync
-        }
-
-        private void SaveScript_Click(object sender, RoutedEventArgs e) => _ = SaveScriptFromTabsAsync();
-
-        private void SaveAsScript_Click(object sender, RoutedEventArgs e) => _ = SaveScriptFromTabsAsync(forceSaveAs: true);
-
-        private async Task SaveScriptFromTabsAsync(bool forceSaveAs = false)
-        {
-            try
-            {
-                var selectedTab = MethodTabs.SelectedItem as TabItem;
-                var header = selectedTab?.Header as string ?? "";
-
-                RoslynPad.Editor.RoslynCodeEditor? editor = null;
-                string defaultName = "";
-
-                if (header.Contains("Packet Registry"))
-                {
-                    editor = RegistryEditor;
-                    defaultName = "PacketRegistry.csx";
-                }
-                else if (header.Contains("Packet Serializer"))
-                {
-                    editor = SerializerEditor;
-                    defaultName = "PacketSerializer.csx";
-                }
-                else if (header.Contains("Packet Handler"))
-                {
-                    editor = ContextEditor;
-                    defaultName = "PacketHandler.csx";
-                }
-                else if (header.Contains("Packet Header"))
-                {
-                    editor = HeaderEditor;
-                    defaultName = "PacketHeader.csx";
-                }
-
-                if (editor != null)
-                {
-                    await SaveEditorToFileAsync(editor, defaultName);
-                }
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"[Error] SaveScript: {ex.Message}", Brushes.Red);
-            }
-        }
-
-        private void CompileScriptBtn_Click(object sender, RoutedEventArgs e) => _ = CompileScriptBtn_ClickAsync();
-        private async Task CompileScriptBtn_ClickAsync()
-        {
-            try
-            {
-                // Auto-save before compile
-                await SaveAllSilentAsync();
-
-                var selectedTab = MethodTabs.SelectedItem as TabItem;
-                var header = selectedTab?.Header as string ?? "";
-
-                // Note: Header names might be localized now, e.g. "Packet Registry (패킷 등록)"
-                // Use Contains to be safe
-                // Logging Helper
-                Action<string> uiLogger = (msg) => 
-                {
-                    Dispatcher.Invoke(() => 
-                    {
-                        ScriptLogBox.Text += $"\n{msg}";
-                        ScriptLogBox.ScrollToEnd();
-                    });
-                };
-
-                // Always run full compilation (Regression: Validation-only mode caused missing reference issues)
-                await CompileScriptAsync(uiLogger);
-            }
-            catch (Exception ex)
-            {
-                ScriptLogBox.Text += $"\n[Error] {ex.GetType().Name}: {ex.Message}";
-                ScriptLogBox.Foreground = Brushes.Red;
-                AppendLog($"[Error] CompileScript: {ex.Message}", Brushes.Red);
-            }
-        }
-
-
-        private System.Reflection.Assembly? _scriptAssembly;
-        private System.Reflection.Assembly? _headerAssembly;
-
-        private async Task CompileScriptAsync(Action<string>? logger = null)
-        {
-            ScriptLogBox.Text = "스크립트 체인 컴파일 중... (Compiling)";
-            ScriptLogBox.Foreground = Brushes.White;
+            if (string.IsNullOrEmpty(dir)) return;
 
             try
             {
-                var dir = AppDomain.CurrentDomain.BaseDirectory;
+                logAction("Starting Compilation (from Disk)...", Brushes.White);
 
                 // 1. Compile Registry
                 var regPath = Path.Combine(dir, "PacketRegistry.csx");
                 if (!File.Exists(regPath)) throw new FileNotFoundException("PacketRegistry.csx 없음");
 
-                ScriptLogBox.Text += "\nPacket Registry 컴파일 중...";
-                var regDllPath = await _scriptLoader.CompileToDllAsync(regPath, null, logger);
+                logAction("Packet Registry 컴파일 중...", Brushes.White);
+                
+                var regDllPath = await _scriptLoader.CompileToDllAsync(regPath, new string[0], (msg) => logAction(msg, Brushes.Gray));
 
                 // 1.5 Compile Header
                 var headerPath = Path.Combine(dir, "PacketHeader.csx");
                 string headerDllPath = "";
                 if (File.Exists(headerPath))
                 {
-                     ScriptLogBox.Text += "\nPacket Header 컴파일 중...";
-                     headerDllPath = await _scriptLoader.CompileToDllAsync(headerPath, new [] { regDllPath }, logger);
+                     logAction("Packet Header 컴파일 중...", Brushes.White);
+                     headerDllPath = await _scriptLoader.CompileToDllAsync(headerPath, new [] { regDllPath }, (msg) => logAction(msg, Brushes.Gray));
                 }
 
                 // 2. Compile Serializer
                 var serPath = Path.Combine(dir, "PacketSerializer.csx");
                 if (!File.Exists(serPath)) throw new FileNotFoundException("PacketSerializer.csx 없음");
 
-                ScriptLogBox.Text += "\nPacket Serializer 컴파일 중...";
+                logAction("Packet Serializer 컴파일 중...", Brushes.White);
                 var serRefs = new List<string> { regDllPath };
                 if (!string.IsNullOrEmpty(headerDllPath)) serRefs.Add(headerDllPath);
                 
-                var serDllPath = await _scriptLoader.CompileToDllAsync(serPath, serRefs, logger);
+                var serDllPath = await _scriptLoader.CompileToDllAsync(serPath, serRefs, (msg) => logAction(msg, Brushes.Gray));
 
                 // 3. Compile Context (User Logic)
                 var mainPath = Path.Combine(dir, "PacketHandler.csx");
@@ -452,8 +115,7 @@ namespace ProtoTestTool
 
                 if (!File.Exists(mainPath))
                 {
-                    ContextEditor.Text = GetDefaultTemplate("MyScriptContext");
-                    await File.WriteAllTextAsync(mainPath, ContextEditor.Text);
+                    CreateIfMissing(dir, "PacketHandler.csx", "MyScriptContext");
                 }
 
                 var mainCode = await File.ReadAllTextAsync(mainPath);
@@ -462,7 +124,7 @@ namespace ProtoTestTool
                 var cleanLines = lines.Where(l => !l.TrimStart().StartsWith("#load")).ToArray();
                 await File.WriteAllLinesAsync(buildPath, cleanLines);
 
-                ScriptLogBox.Text += "\nUser Logic 컴파일 중...";
+                logAction("User Logic 컴파일 중...", Brushes.White);
 
                 // Collect References
                 var protoGenDir = Path.Combine(dir, "ProtoGen");
@@ -475,41 +137,35 @@ namespace ProtoTestTool
                     protoRefs.AddRange(protoDlls);
                 }
 
-                // Load Registry & Codec Instances early to Init Globals
-                var regAssembly = System.Reflection.Assembly.Load(File.ReadAllBytes(regDllPath));
+                // Load Registry & Codec Instances
+                var regAssembly = System.Reflection.Assembly.LoadFrom(regDllPath);
                 var regType = regAssembly.GetTypes().FirstOrDefault(t => typeof(IPacketRegistry).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
-                if (regType == null) throw new Exception("IPacketRegistry 구현체를 찾을 수 없습니다.");
+                if (regType == null) throw new Exception($"IPacketRegistry implementation not found in {regDllPath}");
+                var registry = (IPacketRegistry)Activator.CreateInstance(regType)!;
 
-                // Try to inject logger if constructor supports it
-                IPacketRegistry registry;
-                var ctorWithLogger = regType.GetConstructor(new[] {typeof(Action<string>)});
-                if (ctorWithLogger != null)
-                {
-                    registry = (IPacketRegistry) ctorWithLogger.Invoke(new object[] {(Action<string>) ((msg) => Dispatcher.Invoke(() => AppendLog(msg)))});
-                }
-                else
-                {
-                    registry = (IPacketRegistry) Activator.CreateInstance(regType)!;
-                }
-
-                var serAssembly = System.Reflection.Assembly.Load(File.ReadAllBytes(serDllPath));
-                var serType = serAssembly.GetTypes().FirstOrDefault(t => typeof(IPacketCodec).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
-                if (serType == null) throw new Exception("IPacketCodec 구현체를 찾을 수 없습니다.");
-                var codec = (IPacketCodec) Activator.CreateInstance(serType)!;
+                var serAssembly = System.Reflection.Assembly.LoadFrom(serDllPath);
+                var codecType = serAssembly.GetTypes().FirstOrDefault(t => typeof(IPacketCodec).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
+                if (codecType == null) throw new Exception($"IPacketCodec implementation not found in {serDllPath}");
+                var codec = (IPacketCodec)Activator.CreateInstance(codecType)!;
 
                 // Init Globals
-                // Ensure StateStore exists
                 if (_scriptState == null) _scriptState = new ScriptStateStore();
 
+                // Runtime Logger (still routes to Main LogBox via dispatcher, kept as is or passed?)
+                // The runtime logger is for "during execution". 
+                // We'll keep the current behavior: toolLogger writes to Main LogBox.
+                // The compilation logger (passed in) writes to ScriptEditor LogBox.
                 var toolLogger = new ToolScriptLogger((msg, color) => { Dispatcher.Invoke(() => AppendLog(msg, color)); });
                 var clientApi = new ToolClientApi(this);
 
                 ScriptGlobals.Initialize(_scriptState, toolLogger);
-                ScriptGlobals.SetApis(clientApi, null); // ProxyApi not yet implemented globally
+                ScriptGlobals.SetApis(clientApi, null);
                 ScriptGlobals.SetServices(registry, codec);
 
                 // Load User Logic
-                var contextAssembly = await _scriptLoader.LoadScriptWithReferencesAsync(buildPath, protoRefs, logger);
+                Action<string> compileLogger = (msg) => logAction(msg, Brushes.Gray);
+                var contextAssembly = await _scriptLoader.LoadScriptWithReferencesAsync(buildPath, protoRefs, compileLogger);
+                
                 _scriptAssembly = contextAssembly;
 
                 if (!string.IsNullOrEmpty(headerDllPath))
@@ -528,20 +184,20 @@ namespace ProtoTestTool
                     _clientInterceptor = null;
                 }
 
-                // Proxy Interceptor is mostly for ProxySession, which needs to find it per connection or prototype.
-                // We'll leave Proxy logic as is for now (StartProxyServer finds IProxyPacketInterceptor).
-
-                ScriptLogBox.Text += $"\n[{DateTime.Now:HH:mm:ss}] Compilation Success!";
-                ScriptLogBox.Foreground = Brushes.DeepSkyBlue;
-
+                logAction("Compilation Success!", Brushes.DeepSkyBlue);
                 RefreshPacketList();
             }
             catch (Exception ex)
             {
-                ScriptLogBox.Text += $"\n[{DateTime.Now:HH:mm:ss}] Error:\n{ex.Message}";
-                ScriptLogBox.Foreground = Brushes.Red;
+                logAction($"Error:\n{ex.Message}", Brushes.Red);
             }
         }
+
+
+        private System.Reflection.Assembly? _scriptAssembly;
+        private System.Reflection.Assembly? _headerAssembly;
+
+
 
         private void RefreshPacketList()
         {
@@ -555,44 +211,45 @@ namespace ProtoTestTool
             PacketListBox.ItemsSource = types;
         }
 
-        #endregion
 
-        private void LoadScriptIntoTabs(string code)
+
+
+
+        public void InitializeWorkspaceFiles(string workspacePath)
         {
-            var tree = CSharpSyntaxTree.ParseText(code);
-            var root = tree.GetRoot();
-            var classes = root.DescendantNodes().OfType<ClassDeclarationSyntax>().ToList();
+            if (string.IsNullOrWhiteSpace(workspacePath) || !Directory.Exists(workspacePath)) return;
 
-            // Default templates if missing
-            RegistryEditor.Text = GetDefaultTemplate("PacketRegistry");
-            SerializerEditor.Text = GetDefaultTemplate("PacketSerializer");
-            ContextEditor.Text = GetDefaultTemplate("MyScriptContext");
-
-            foreach (var cls in classes)
+            CreateIfMissing(workspacePath, "PacketRegistry.csx", "PacketRegistry");
+            CreateIfMissing(workspacePath, "PacketHeader.csx", "PacketHeader");
+            CreateIfMissing(workspacePath, "PacketSerializer.csx", "PacketSerializer");
+            CreateIfMissing(workspacePath, "PacketHandler.csx", "MyScriptContext");
+            
+            // Create default config
+            var configPath = Path.Combine(workspacePath, "workspace_config.json");
+            if (!File.Exists(configPath))
             {
-                // Simple heuristic: check base list or class name
-                if (IsImplementationOf(cls, "IPacketRegistry") || cls.Identifier.Text.Contains("Registry"))
-                {
-                    RegistryEditor.Text = cls.ToFullString();
-                }
-                else if (IsImplementationOf(cls, "IHeader") || cls.Identifier.Text.Contains("Header"))
-                {
-                    HeaderEditor.Text = cls.ToFullString();
-                }
-                else if (IsImplementationOf(cls, "IPacketSerializer") || cls.Identifier.Text.Contains("Serializer"))
-                {
-                    SerializerEditor.Text = cls.ToFullString();
-                }
-                else if (IsImplementationOf(cls, "IScriptContext") || cls.Identifier.Text.Contains("Context"))
-                {
-                    ContextEditor.Text = cls.ToFullString();
-                }
+                var defaultConfig = new WorkspaceConfig(); // Defaults: 127.0.0.1:9000
+                defaultConfig.Save(workspacePath);
+                Dispatcher.Invoke(() => AppendLog($"[Workspace] Created workspace_config.json", Brushes.Green));
             }
+        }
 
-            bool IsImplementationOf(ClassDeclarationSyntax cls, string interfaceName)
+
+
+        private void CreateIfMissing(string dir, string fileName, string templateName)
+        {
+            var path = Path.Combine(dir, fileName);
+            if (!File.Exists(path))
             {
-                if (cls.BaseList == null) return false;
-                return cls.BaseList.Types.Any(t => t.Type.ToString().Contains(interfaceName));
+                try
+                {
+                    File.WriteAllText(path, GetDefaultTemplate(templateName));
+                    Dispatcher.Invoke(() => AppendLog($"[Workspace] Created {fileName}", Brushes.Green));
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.Invoke(() => AppendLog($"[Error] Failed to create {fileName}: {ex.Message}", Brushes.Red));
+                }
             }
         }
 
@@ -725,37 +382,7 @@ public class MyInterceptor : IProxyPacketInterceptor
             };
         }
 
-        private string SaveScriptFromTabs()
-        {
-            // Combine components
-            // Strategy: Take all using directives from all tabs, deduplicate them at the top.
-            // Then append the class bodies.
-            // Then append the return new MyScriptContext();
 
-            var combinedCode = new System.Text.StringBuilder();
-
-            // 1. Gather Import
-            // A simple approach: Just concat them all. C# can handle duplicate imports usually, 
-            // but multiple `namespace` blocks or partials might be weird.
-            // User snippet shows standard classes.
-
-            // To allow users to just copy-paste entire files, we will just concatenate them with logic to hoist usings if we wanted to be fancy,
-            // but for simplicity and robustness with standard copy-pastes, we can just append them.
-            // HOWEVER, we need to ensure the final 'return' statement exists outside any class.
-
-            combinedCode.AppendLine(RegistryEditor.Text);
-            combinedCode.AppendLine();
-            combinedCode.AppendLine(SerializerEditor.Text);
-            combinedCode.AppendLine();
-            combinedCode.AppendLine(ContextEditor.Text);
-            combinedCode.AppendLine();
-
-            // Final Return
-            combinedCode.AppendLine("return new MyScriptContext();");
-
-            var finalCode = combinedCode.ToString();
-            return finalCode;
-        }
 
         #region Proto Manager
 
@@ -804,6 +431,9 @@ public class MyInterceptor : IProxyPacketInterceptor
                         ProtoLogBox.Text += $"\n[Manager] No .proto files found in {dialog.FolderName}";
                         return;
                     }
+
+                    _protoFolderPath = dialog.FolderName;
+                    SaveWorkspaceConfiguration();
 
                     await ProcessProtosAsync(files);
                 }
@@ -920,43 +550,7 @@ public class MyInterceptor : IProxyPacketInterceptor
 
 
                 // Update Registry Editor
-                if (registeredMessages.Count > 0)
-                {
-                    var code = RegistryEditor.Text;
-                    var linesToAdd = new List<string>();
-                    foreach (var line in registeredMessages)
-                    {
-                        if (!code.Contains(line.Trim()))
-                        {
-                            linesToAdd.Add(line);
-                        }
-                    }
 
-                    if (linesToAdd.Count > 0)
-                    {
-                        var insertIdx = code.LastIndexOf('}'); // Class closing
-                        if (insertIdx > 0)
-                        {
-                            insertIdx = code.LastIndexOf('}', insertIdx - 1); // Method closing
-                        }
-
-                        if (insertIdx > 0)
-                        {
-                            var newCode = code.Insert(insertIdx, string.Join(Environment.NewLine, linesToAdd) + Environment.NewLine);
-                            RegistryEditor.Text = newCode;
-                            ProtoLogBox.Text += $"\n[Manager] Added {linesToAdd.Count} types to Registry.";
-                            AppendLog($"[Proto] Added {linesToAdd.Count} types to Registry.", Brushes.MediumPurple);
-                        }
-                        else
-                        {
-                            ProtoLogBox.Text += "\n[Warn] Could not auto-update RegistryEditor. Please add lines manually.";
-                        }
-                    }
-                    else
-                    {
-                        ProtoLogBox.Text += "\n[Manager] Registry already up-to-date.";
-                    }
-                }
 
                 ProtoLogBox.ScrollToEnd();
             }
@@ -985,14 +579,14 @@ public class MyInterceptor : IProxyPacketInterceptor
             // Start Proxy
             if (_scriptAssembly == null)
             {
-                MessageBox.Show("스크립트를 먼저 컴파일해 주세요 (Compile First).");
+                FluentMessageBox.ShowError("스크립트를 먼저 컴파일해 주세요.");
                 return;
             }
 
             if (!int.TryParse(ProxyLocalPortBox.Text, out var localPort) ||
                 !int.TryParse(ProxyTargetPortBox.Text, out var targetPort))
             {
-                MessageBox.Show("포트 번호가 올바르지 않습니다.");
+                FluentMessageBox.ShowError("포트 번호가 올바르지 않습니다.");
                 return;
             }
 
@@ -1005,7 +599,7 @@ public class MyInterceptor : IProxyPacketInterceptor
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"프록시 시작 실패: {ex.Message}");
+                FluentMessageBox.ShowError($"프록시 시작 실패: {ex.Message}");
                 AppendProxyLog($"Start Failed: {ex.Message}");
             }
         }

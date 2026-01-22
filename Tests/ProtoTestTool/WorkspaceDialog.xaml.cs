@@ -1,56 +1,112 @@
+using System;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace ProtoTestTool
 {
-    public partial class WorkspaceDialog : Window
+    public partial class WorkspaceDialog : Wpf.Ui.Controls.UiWindow
     {
         public string? SelectedPath { get; private set; }
+        private GlobalSettings _settings;
 
-        public WorkspaceDialog()
+        public class RecentItem
         {
-            InitializeComponent();
+            public string Name { get; set; } = "";
+            public string Path { get; set; } = "";
         }
 
-        public WorkspaceDialog(string? initialPath) : this()
+        public WorkspaceDialog(string? initialPath)
         {
-            if (!string.IsNullOrWhiteSpace(initialPath))
+            InitializeComponent();
+            _settings = GlobalSettings.Load();
+            LoadRecentList();
+            Activate();
+            Focus();
+        }
+        
+        // Default constructor required for XAML
+        public WorkspaceDialog() : this(null) { }
+
+        private void LoadRecentList()
+        {
+            var items = _settings.RecentWorkspaces
+                .Where(Directory.Exists) // Filter out missing folders
+                .Select(p => new RecentItem 
+                { 
+                    Name = new DirectoryInfo(p).Name, 
+                    Path = p 
+                })
+                .ToList();
+
+            RecentListBox.ItemsSource = items;
+        }
+
+        private void SelectWorkspace(string path)
+        {
+            if (Directory.Exists(path))
             {
-                PathTextBox.Text = initialPath;
-                OkBtn.IsEnabled = Directory.Exists(initialPath);
+                SelectedPath = path;
+                _settings.AddRecent(path); // Update Recent List (move to top)
+                DialogResult = true;
+                Close();
+            }
+            else
+            {
+                FluentMessageBox.ShowError($"Folder not found: {path}");
+                
+                _settings.RemoveRecent(path);
+                LoadRecentList();
             }
         }
 
-        private void BrowseBtn_Click(object sender, RoutedEventArgs e)
+        private void NewBtn_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new Microsoft.Win32.OpenFolderDialog
             {
-                Title = "Workspace 폴더 선택"
+                Title = "Select New Workspace Folder (Empty Folder Recommended)"
             };
-
-            if (!string.IsNullOrWhiteSpace(PathTextBox.Text) && Directory.Exists(PathTextBox.Text))
-            {
-                dialog.InitialDirectory = PathTextBox.Text;
-            }
 
             if (dialog.ShowDialog() == true)
             {
-                PathTextBox.Text = dialog.FolderName;
-                OkBtn.IsEnabled = true;
+                SelectWorkspace(dialog.FolderName);
             }
         }
 
-        private void OkBtn_Click(object sender, RoutedEventArgs e)
+        private void OpenBtn_Click(object sender, RoutedEventArgs e)
         {
-            SelectedPath = PathTextBox.Text;
-            DialogResult = true;
-            Close();
+             var dialog = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "Open Existing Workspace"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                SelectWorkspace(dialog.FolderName);
+            }
         }
 
-        private void CancelBtn_Click(object sender, RoutedEventArgs e)
+        private void RecentListBox_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            DialogResult = false;
-            Close();
+            if (RecentListBox.SelectedItem is RecentItem item)
+            {
+                SelectWorkspace(item.Path);
+            }
+        }
+
+        private void RecentListBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter && RecentListBox.SelectedItem is RecentItem item)
+            {
+                SelectWorkspace(item.Path);
+            }
+        }
+
+        private void ExitBtn_Click(object sender, RoutedEventArgs e)
+        {
+            Application.Current.Shutdown();
         }
     }
 }

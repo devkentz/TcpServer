@@ -20,7 +20,7 @@ using Microsoft.IO;
 using Google.Protobuf;
 using System.Diagnostics.CodeAnalysis;
 
-
+IPacketCodec
 public static class PacketDefine
 {
     public static int MaxPacketSize { get; set; } = 1024 * 1024 * 2;

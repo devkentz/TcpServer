@@ -7,12 +7,13 @@ using ProtoTestTool.Network;
 using ProtoTestTool.ScriptContract;
 using System.Collections.ObjectModel;
 using Google.Protobuf;
+using Google.Protobuf.Reflection;
 using ProtoTestTool.Roslyn;
 
 
 namespace ProtoTestTool
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : Wpf.Ui.Controls.UiWindow
     {
         private SimpleTcpClient? _client;
         private readonly ScriptLoader _scriptLoader = new();
@@ -20,6 +21,7 @@ namespace ProtoTestTool
 
         // Roslyn
         private readonly RoslynService _roslynService;
+        private ScriptEditorWindow? _scriptEditorWindow;
 
         // Editor State
         private string _currentEditingFile = "";
@@ -46,6 +48,7 @@ namespace ProtoTestTool
         public MainWindow()
         {
             InitializeComponent();
+            Closing += MainWindow_Closing;
 
             // Initialize Globals with dummy logger for startup (real logger injected on compilation)
             ScriptContract.ScriptGlobals.Initialize(
@@ -75,17 +78,28 @@ namespace ProtoTestTool
         {
             try
             {
+                // Initialize Roslyn Editor
+                if (_roslynService?.Host != null)
+                {
+                    await ProtoSourceViewer.InitializeAsync(
+                        _roslynService.Host, 
+                        new RoslynPad.Editor.ClassificationHighlightColors(), 
+                        _workspacePath, 
+                        string.Empty, 
+                        Microsoft.CodeAnalysis.SourceCodeKind.Script
+                    );
+                }
                 // Show Workspace dialog if not set
                 if (string.IsNullOrWhiteSpace(_workspacePath) || !Directory.Exists(_workspacePath))
                 {
                     ShowWorkspaceDialog();
                 }
 
-                await InitializeRoslynEditorAsync();
+
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Editor Init Failed: {ex.Message}");
+                FluentMessageBox.ShowError($"Editor Init Failed: {ex.Message}");
             }
         }
 
@@ -105,10 +119,30 @@ namespace ProtoTestTool
             if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
             {
                 _workspacePath = dialog.SelectedPath;
-                SaveWorkspaceSettings();
+                // Save workspace to Global Settings is done inside Dialog.SelectWorkspace
+                // But we still persist specific settings if needed:
+                SaveWorkspaceSettings(); 
+                
+                InitializeWorkspaceFiles(_workspacePath);
+                LoadWorkspaceConfiguration(_workspacePath);
                 UpdateWorkspaceUI();
-                AppendLog($"Workspace 설정됨: {_workspacePath}", Brushes.DeepSkyBlue);
+                AppendLog($"Workspace Loaded: {_workspacePath}", Brushes.DeepSkyBlue);
             }
+            else
+            {
+                // If user cancels on startup (and we needed a workspace), we might want to close
+                // But since this is also called from the button, we check:
+                if (string.IsNullOrWhiteSpace(_workspacePath))
+                {
+                    Application.Current.Shutdown();
+                }
+            }
+        }
+
+        private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            SaveWorkspaceSettings();       // Global Recent List
+            SaveWorkspaceConfiguration();  // Current Workspace Config
         }
 
         private void LoadWorkspaceSettings()
@@ -123,6 +157,9 @@ namespace ProtoTestTool
                     if (settings != null && !string.IsNullOrWhiteSpace(settings.WorkspacePath))
                     {
                         _workspacePath = settings.WorkspacePath;
+                        InitializeWorkspaceFiles(_workspacePath);
+
+                        LoadWorkspaceConfiguration(_workspacePath);
                     }
                 }
             }
@@ -132,6 +169,67 @@ namespace ProtoTestTool
             }
 
             UpdateWorkspaceUI();
+        }
+
+        private void LoadWorkspaceConfiguration(string path)
+        {
+            var config = WorkspaceConfig.Load(path);
+            
+            // Connection
+            IpBox.Text = config.TargetIp;
+            PortBox.Text = config.TargetPort.ToString();
+
+            // Proxy
+            ProxyLocalPortBox.Text = config.ProxyLocalPort.ToString();
+            ProxyTargetIpBox.Text = config.ProxyTargetIp;
+            ProxyTargetPortBox.Text = config.ProxyTargetPort.ToString();
+
+            // Proto Path
+            if (!string.IsNullOrWhiteSpace(config.ProtoFolderPath) && Directory.Exists(config.ProtoFolderPath))
+            {
+                _protoFolderPath = config.ProtoFolderPath;
+                 // Asynchronously load protos without blocking UI
+                _ = LoadProtosFromFolderAsync(_protoFolderPath);
+            }
+        }
+
+        private void SaveWorkspaceConfiguration()
+        {
+            if (string.IsNullOrWhiteSpace(_workspacePath)) return;
+
+            var config = new WorkspaceConfig
+            {
+                TargetIp = IpBox.Text,
+                ProtoFolderPath = _protoFolderPath // needs to be tracked
+            };
+
+            if (int.TryParse(PortBox.Text, out var port)) config.TargetPort = port;
+            if (int.TryParse(ProxyLocalPortBox.Text, out var pLocal)) config.ProxyLocalPort = pLocal;
+            if (int.TryParse(ProxyTargetPortBox.Text, out var pTarget)) config.ProxyTargetPort = pTarget;
+            config.ProxyTargetIp = ProxyTargetIpBox.Text;
+
+            config.Save(_workspacePath);
+            Dispatcher.Invoke(() => AppendLog($"[Config] Saved to {_workspacePath}", Brushes.Gray));
+        }
+
+        // Field to track current proto folder
+        private string _protoFolderPath = "";
+
+        private async Task LoadProtosFromFolderAsync(string folder)
+        {
+             try
+             {
+                 var files = Directory.GetFiles(folder, "*.proto", SearchOption.AllDirectories);
+                 if (files.Length > 0)
+                 {
+                      await ProcessProtosAsync(files);
+                      Dispatcher.Invoke(() => AppendLog($"[Proto] Auto-loaded from {folder}", Brushes.Green));
+                 }
+             }
+             catch (Exception ex)
+             {
+                 Dispatcher.Invoke(() => AppendLog($"[Error] Auto-load proto: {ex.Message}", Brushes.Red));
+             }
         }
 
         private void SaveWorkspaceSettings()
@@ -176,21 +274,19 @@ namespace ProtoTestTool
         {
             ClientView.Visibility = Visibility.Visible;
             ProxyView.Visibility = Visibility.Collapsed;
-            EditorView.Visibility = Visibility.Collapsed;
+
         }
 
         private void ModeProxy_Click(object sender, RoutedEventArgs e)
         {
             ClientView.Visibility = Visibility.Collapsed;
             ProxyView.Visibility = Visibility.Visible;
-            EditorView.Visibility = Visibility.Collapsed;
+
         }
 
         private void ModeEditor_Click(object sender, RoutedEventArgs e)
         {
-            ClientView.Visibility = Visibility.Collapsed;
-            ProxyView.Visibility = Visibility.Collapsed;
-            EditorView.Visibility = Visibility.Visible;
+            // Removed: EditorView.Visibility = Visibility.Visible;
         }
         
         private void ResetState_Click(object sender, RoutedEventArgs e)
@@ -222,6 +318,8 @@ namespace ProtoTestTool
                 AppendLog("Invalid Port", Brushes.Red);
                 return;
             }
+
+            SaveWorkspaceConfiguration();
 
             try
             {
@@ -256,6 +354,43 @@ namespace ProtoTestTool
         private void DisconnectBtn_Click(object sender, RoutedEventArgs e)
         {
             _client?.DisconnectAndStop();
+        }
+
+        private void OpenScriptEditor_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_workspacePath)) 
+            {
+                AppendLog("Please load a workspace first.", Brushes.Red);
+                return;
+            }
+
+            if (_scriptEditorWindow == null || !_scriptEditorWindow.IsLoaded)
+            {
+                _scriptEditorWindow = new ScriptEditorWindow(_workspacePath, _scriptLoader, _roslynService);
+                
+                _scriptEditorWindow.OnRequestCompilation += () => 
+                {
+                    var win = _scriptEditorWindow;
+                    if (win == null) return;
+                    
+                    Action<string, Brush> editorLogger = (msg, color) => 
+                    {
+                        win.Dispatcher.Invoke(() => win.AppendLog(msg, color));
+                    };
+
+                    Dispatcher.InvokeAsync(async () => 
+                    {
+                        await CompileScriptsAsync(_workspacePath, editorLogger);
+                    });
+                };
+                
+                _scriptEditorWindow.Show();
+            }
+            else
+            {
+                _scriptEditorWindow.Activate();
+                if (_scriptEditorWindow.WindowState == WindowState.Minimized) _scriptEditorWindow.WindowState = WindowState.Normal;
+            }
         }
 
         private void UpdateConnectionState(bool connected)
@@ -317,8 +452,7 @@ namespace ProtoTestTool
                     var descriptorProp = convertor.Type.GetProperty("Descriptor", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
                     if (descriptorProp != null)
                     {
-                        var descriptor = descriptorProp.GetValue(null) as Google.Protobuf.Reflection.MessageDescriptor;
-                        if (descriptor != null)
+                        if (descriptorProp.GetValue(null) is MessageDescriptor descriptor)
                         {
                             var protoFileName = descriptor.File.Name; // e.g. "Common.proto" or "Folder/Common.proto"
                             
@@ -346,17 +480,25 @@ namespace ProtoTestTool
             }
         }
         
-        private void SendBtn_Click(object sender, RoutedEventArgs e) => SendBtn_ClickAsync();
-        private void SendBtn_ClickAsync()
+        private async void SendBtn_Click(object sender, RoutedEventArgs e)
+        {
+             await SendBtn_ClickAsync(sender, e);
+        }
+
+        private async Task SendBtn_ClickAsync(object sender, RoutedEventArgs e)
         {
             try
             {
-                if (PacketListBox.SelectedItem == null)
-                    return;
+                if (_scriptAssembly == null)
+                {
+                     // Compile First
+                     await CompileScriptsAsync(_workspacePath, AppendLog);
+                     if (_scriptAssembly == null) return; 
+                }
 
                 if (_client == null || !_client.IsConnected)
                 {
-                     MessageBox.Show("서버에 연결되지 않았습니다.");
+                     FluentMessageBox.ShowError("서버에 연결되지 않았습니다.");
                      return;
                 }
 
@@ -432,7 +574,7 @@ namespace ProtoTestTool
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"전송 오류: {ex.Message}");
+                FluentMessageBox.ShowError($"전송 오류: {ex.Message}");
                 AppendLog($"[Error] {ex.Message}", Brushes.Red);
             }
         }
