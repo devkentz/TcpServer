@@ -7,8 +7,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
-using RoslynPad.Editor;
-using RoslynPad.Roslyn;
 using ProtoTestTool.Network;
 using ProtoTestTool.ScriptContract;
 

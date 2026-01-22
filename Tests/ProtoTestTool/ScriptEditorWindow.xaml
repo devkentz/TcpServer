@@ -1,7 +1,7 @@
 <ui:UiWindow x:Class="ProtoTestTool.ScriptEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:roslyn="clr-namespace:RoslynPad.Editor;assembly=RoslynPad.Editor.Windows"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         xmlns:ui="clr-namespace:Wpf.Ui.Controls;assembly=Wpf.Ui"
         Title="Script Editor" Height="800" Width="1000"
         WindowStartupLocation="CenterScreen"
@@ -84,16 +84,16 @@
                  </Style>
              </TabControl.Resources>
              <TabItem Header="PacketRegistry.csx">
-                 <roslyn:RoslynCodeEditor x:Name="RegistryEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True" Background="#1E1E1E" Foreground="#D4D4D4"/>
+                 <wv2:WebView2 x:Name="RegistryEditor" />
              </TabItem>
              <TabItem Header="PacketHeader.csx">
-                 <roslyn:RoslynCodeEditor x:Name="HeaderEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True" Background="#1E1E1E" Foreground="#D4D4D4"/>
+                 <wv2:WebView2 x:Name="HeaderEditor" />
              </TabItem>
              <TabItem Header="PacketSerializer.csx">
-                 <roslyn:RoslynCodeEditor x:Name="SerializerEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True" Background="#1E1E1E" Foreground="#D4D4D4"/>
+                 <wv2:WebView2 x:Name="SerializerEditor" />
              </TabItem>
              <TabItem Header="PacketHandler.csx">
-                 <roslyn:RoslynCodeEditor x:Name="ContextEditor" FontFamily="Consolas" FontSize="14" ShowLineNumbers="True" Background="#1E1E1E" Foreground="#D4D4D4"/>
+                 <wv2:WebView2 x:Name="ContextEditor" />
              </TabItem>
          </TabControl>
  

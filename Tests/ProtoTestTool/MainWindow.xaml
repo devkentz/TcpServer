@@ -3,7 +3,6 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:roslyn="clr-namespace:RoslynPad.Editor;assembly=RoslynPad.Editor.Windows"
         xmlns:ui="clr-namespace:Wpf.Ui.Controls;assembly=Wpf.Ui"
         mc:Ignorable="d"
         Title="TCP Packet Lab" Height="900" Width="1400"
@@ -152,64 +151,64 @@
                           <ColumnDefinition Width="*"/>
                       </Grid.ColumnDefinitions>
                       
-                      <!-- Request Inspector -->
-                      <ui:Card Grid.Column="0" VerticalAlignment="Stretch" Padding="0">
-                          <Grid>
-                              <Grid.RowDefinitions>
-                                  <RowDefinition Height="Auto"/>
-                                  <RowDefinition Height="*"/>
-                              </Grid.RowDefinitions>
-                              <TextBlock Text="Request Inspector" Margin="15,10" FontWeight="Bold"/>
-                              <TabControl Grid.Row="1" Margin="5">
-                                  <TabItem Header="Body (JSON)">
-                                      <TextBox x:Name="JsonEditor" AcceptsReturn="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" Background="Transparent" Foreground="{DynamicResource TextFillColorPrimaryBrush}" BorderThickness="0"/>
-                                  </TabItem>
-                                  <TabItem Header="Header (JSON)">
-                                      <TextBox x:Name="HeaderJsonEditor" Text="{}" AcceptsReturn="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" Background="Transparent" Foreground="{DynamicResource TextFillColorPrimaryBrush}" BorderThickness="0"/>
-                                  </TabItem>
-                                  <TabItem Header="Proto Source">
-                                      <roslyn:RoslynCodeEditor x:Name="ProtoSourceViewer" IsReadOnly="True" FontFamily="Consolas" FontSize="12" ShowLineNumbers="True" Background="White" Foreground="Black"/>
-                                  </TabItem>
-                              </TabControl>
-                          </Grid>
-                      </ui:Card>
+                     <!-- Request Inspector -->
+                     <ui:Card Grid.Column="0" VerticalAlignment="Stretch" Padding="0">
+                         <Grid>
+                             <Grid.RowDefinitions>
+                                 <RowDefinition Height="Auto"/>
+                                 <RowDefinition Height="*"/>
+                             </Grid.RowDefinitions>
+                             <TextBlock Text="Request Inspector" Margin="15,10" FontWeight="Bold"/>
+                             <TabControl Grid.Row="1" Margin="5">
+                                 <TabItem Header="Body (JSON)">
+                                     <TextBox x:Name="JsonEditor" AcceptsReturn="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" Background="Transparent" Foreground="{DynamicResource TextFillColorPrimaryBrush}" BorderThickness="0" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" VerticalContentAlignment="Top"/>
+                                 </TabItem>
+                                 <TabItem Header="Header (JSON)">
+                                     <TextBox x:Name="HeaderJsonEditor" Text="{}" AcceptsReturn="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" Background="Transparent" Foreground="{DynamicResource TextFillColorPrimaryBrush}" BorderThickness="0" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" VerticalContentAlignment="Top"/>
+                                 </TabItem>
+                                 <TabItem Header="Proto Source">
+                                     <TextBox x:Name="ProtoSourceViewer" IsReadOnly="True" FontFamily="Consolas" FontSize="12" Background="{DynamicResource InputBrush}" Foreground="{DynamicResource TextFillColorPrimaryBrush}" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" VerticalContentAlignment="Top"/>
+                                 </TabItem>
+                             </TabControl>
+                         </Grid>
+                     </ui:Card>
 
-                      <!-- Response Inspector -->
-                      <ui:Card Grid.Column="2" VerticalAlignment="Stretch" Padding="0">
-                          <Grid>
-                              <Grid.RowDefinitions>
-                                  <RowDefinition Height="Auto"/>
-                                  <RowDefinition Height="*"/>
-                              </Grid.RowDefinitions>
-                              <TextBlock Text="Response Inspector" Margin="15,10" FontWeight="Bold"/>
-                              <TabControl Grid.Row="1" Margin="5">
-                                  <TabItem Header="Body (JSON)">
-                                      <TextBox x:Name="ResponseBox" IsReadOnly="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" Background="Transparent" Foreground="{DynamicResource TextFillColorPrimaryBrush}" BorderThickness="0"/>
-                                  </TabItem>
-                                  <TabItem Header="Headers">
-                                      <DataGrid x:Name="ResponseHeaderGrid" AutoGenerateColumns="False" IsReadOnly="True" BorderThickness="0" Background="Transparent">
-                                          <DataGrid.Columns>
-                                              <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="*"/>
-                                              <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
-                                          </DataGrid.Columns>
-                                      </DataGrid>
-                                  </TabItem>
-                              </TabControl>
-                          </Grid>
-                      </ui:Card>
-                 </Grid>
- 
-                 <!-- System Logs -->
-                 <ui:Card Grid.Row="3" Margin="0,15,0,0" Padding="0">
-                     <Grid>
-                         <Grid.RowDefinitions>
-                             <RowDefinition Height="Auto"/>
-                             <RowDefinition Height="*"/>
-                         </Grid.RowDefinitions>
-                         <TextBlock Text="System Logs" Margin="15,10" FontWeight="Bold"/>
-                         <RichTextBox x:Name="LogBox" Grid.Row="1" IsReadOnly="True" VerticalScrollBarVisibility="Auto" Background="Transparent" Foreground="{DynamicResource TextFillColorSecondaryBrush}" BorderThickness="0" Margin="5"/>
-                     </Grid>
-                 </ui:Card>
+                     <!-- Response Inspector -->
+                     <ui:Card Grid.Column="2" VerticalAlignment="Stretch" Padding="0">
+                         <Grid>
+                             <Grid.RowDefinitions>
+                                 <RowDefinition Height="Auto"/>
+                                 <RowDefinition Height="*"/>
+                             </Grid.RowDefinitions>
+                             <TextBlock Text="Response Inspector" Margin="15,10" FontWeight="Bold"/>
+                             <TabControl Grid.Row="1" Margin="5">
+                                 <TabItem Header="Body (JSON)">
+                                     <TextBox x:Name="ResponseBox" IsReadOnly="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" Background="Transparent" Foreground="{DynamicResource TextFillColorPrimaryBrush}" BorderThickness="0" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" VerticalContentAlignment="Top"/>
+                                 </TabItem>
+                                 <TabItem Header="Headers">
+                                     <DataGrid x:Name="ResponseHeaderGrid" AutoGenerateColumns="False" IsReadOnly="True" BorderThickness="0" Background="Transparent">
+                                         <DataGrid.Columns>
+                                             <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="*"/>
+                                             <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                                         </DataGrid.Columns>
+                                     </DataGrid>
+                                 </TabItem>
+                             </TabControl>
+                         </Grid>
+                     </ui:Card>
+                </Grid>
+
+                <!-- System Logs -->
+                <ui:Card Grid.Row="3" Margin="0,15,0,0" Padding="0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="System Logs" Margin="15,10" FontWeight="Bold"/>
+                        <RichTextBox x:Name="LogBox" Grid.Row="1" IsReadOnly="True" VerticalScrollBarVisibility="Auto" Background="Transparent" Foreground="{DynamicResource TextFillColorSecondaryBrush}" BorderThickness="0" Margin="5" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" VerticalContentAlignment="Top"/>
+                    </Grid>
+                </ui:Card>
             </Grid>
 
             <!-- VIEW 2: Reverse Proxy -->
@@ -258,7 +257,7 @@
                                   <RowDefinition Height="*"/>
                               </Grid.RowDefinitions>
                               <TextBlock Text="Proxy Logs" Margin="15,10" FontWeight="Bold"/>
-                              <TextBox x:Name="ProxyLogBox" Grid.Row="1" IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Background="Transparent" Foreground="{DynamicResource TextFillColorSecondaryBrush}" BorderThickness="0" Margin="5"/>
+                              <TextBox x:Name="ProxyLogBox" Grid.Row="1" IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Background="Transparent" Foreground="{DynamicResource TextFillColorSecondaryBrush}" BorderThickness="0" Margin="5" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" VerticalContentAlignment="Top"/>
                           </Grid>
                       </ui:Card>
                  </Grid>

@@ -1,10 +1,10 @@
 using System;
 using System.IO;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
-using ProtoTestTool.Roslyn;
+using Microsoft.Web.WebView2.Core;
 
 namespace ProtoTestTool
 {
@@ -12,17 +12,15 @@ namespace ProtoTestTool
     {
         private readonly string _workspacePath;
         private readonly ScriptLoader _scriptLoader;
-        private readonly RoslynService _roslynService;
         
         // Callback when compilation succeeds
 
 
-        public ScriptEditorWindow(string workspacePath, ScriptLoader scriptLoader, RoslynService roslynService)
+        public ScriptEditorWindow(string workspacePath, ScriptLoader scriptLoader)
         {
             InitializeComponent();
             _workspacePath = workspacePath;
             _scriptLoader = scriptLoader;
-            _roslynService = roslynService;
 
             Loaded += ScriptEditorWindow_Loaded;
         }
@@ -30,69 +28,77 @@ namespace ProtoTestTool
         private async void ScriptEditorWindow_Loaded(object sender, RoutedEventArgs e)
         {
             await InitializeEditorsAsync();
-            LoadFiles();
         }
 
         private async Task InitializeEditorsAsync()
         {
-            if (_roslynService?.Host != null)
+            var editorPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Monaco", "editor.html");
+            if (!File.Exists(editorPath))
             {
-                var darkColors = GetDarkThemeColors();
-                
-                await RegistryEditor.InitializeAsync(_roslynService.Host, darkColors, _workspacePath, String.Empty, Microsoft.CodeAnalysis.SourceCodeKind.Script);
-                await HeaderEditor.InitializeAsync(_roslynService.Host, darkColors, _workspacePath, String.Empty, Microsoft.CodeAnalysis.SourceCodeKind.Script);
-                await SerializerEditor.InitializeAsync(_roslynService.Host, darkColors, _workspacePath, String.Empty, Microsoft.CodeAnalysis.SourceCodeKind.Script);
-                await ContextEditor.InitializeAsync(_roslynService.Host, darkColors, _workspacePath, String.Empty, Microsoft.CodeAnalysis.SourceCodeKind.Script);
+                MessageBox.Show($"Editor host not found at: {editorPath}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
             }
-        }
+            var editorUrl = new Uri(editorPath).AbsoluteUri;
 
-        private RoslynPad.Editor.ClassificationHighlightColors GetDarkThemeColors()
-        {
-            var colors = new RoslynPad.Editor.ClassificationHighlightColors();
+            // Initialize WebView2 for each tab
+            await InitializeWebView(RegistryEditor, editorUrl, "PacketRegistry.csx");
+            await InitializeWebView(HeaderEditor, editorUrl, "PacketHeader.csx");
+            await InitializeWebView(SerializerEditor, editorUrl, "PacketSerializer.csx");
+            await InitializeWebView(ContextEditor, editorUrl, "PacketHandler.csx");
             
-            // Helper to set private/internal properties via Reflection
-            void SetColor(string propName, System.Windows.Media.Color color)
-            {
-                var prop = typeof(RoslynPad.Editor.ClassificationHighlightColors).GetProperty(propName);
-                if (prop != null)
-                {
-                    // Access private setter if necessary
-                    prop.SetValue(colors, new SolidColorBrush(color));
-                }
-            }
-
-            // VS Code Dark Theme Colors
-            SetColor("DefaultBrush", Color.FromRgb(255, 255, 255));      // White (Default)
-            SetColor("KeywordBrush", Color.FromRgb(86, 156, 214));       // #569CD6 (Blue)
-            SetColor("StringBrush", Color.FromRgb(206, 145, 120));       // #CE9178 (Orange)
-            SetColor("CommentBrush", Color.FromRgb(106, 153, 85));       // #6A9955 (Green)
-            SetColor("XmlCommentBrush", Color.FromRgb(106, 153, 85));
-            SetColor("TypeBrush", Color.FromRgb(78, 201, 176));          // #4EC9B0 (Teal)
-            SetColor("MethodBrush", Color.FromRgb(220, 220, 170));       // #DCDCAA (Yellow)
-            SetColor("StaticSymbolBrush", Color.FromRgb(78, 201, 176));
-            SetColor("PreprocessorKeywordBrush", Color.FromRgb(155, 155, 155));
-
-            return colors;
+            SetStatus("Ready");
         }
 
-        private void LoadFiles()
+        private async Task InitializeWebView(Microsoft.Web.WebView2.Wpf.WebView2 webView, string url, string fileName)
         {
-            LoadFile("PacketRegistry.csx", RegistryEditor);
-            LoadFile("PacketHeader.csx", HeaderEditor);
-            LoadFile("PacketSerializer.csx", SerializerEditor);
-            LoadFile("PacketHandler.csx", ContextEditor);
+            try
+            {
+                await webView.EnsureCoreWebView2Async();
+                webView.Source = new Uri(url);
+                
+                // Wait for navigation to complete
+                webView.NavigationCompleted += async (s, e) =>
+                {
+                    if (e.IsSuccess)
+                    {
+                        await LoadFileIntoEditor(webView, fileName);
+                    }
+                };
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"Failed to initialize editor for {fileName}: {ex.Message}", Brushes.Red);
+            }
         }
 
-        private void LoadFile(string fileName, RoslynPad.Editor.RoslynCodeEditor editor)
+        private async Task LoadFileIntoEditor(Microsoft.Web.WebView2.Wpf.WebView2 webView, string fileName)
         {
             var path = Path.Combine(_workspacePath, fileName);
             if (File.Exists(path))
             {
-                editor.Text = File.ReadAllText(path);
+                var content = await File.ReadAllTextAsync(path);
+                // Escape for JS
+                var safeContent = System.Text.Json.JsonSerializer.Serialize(content);
+                await webView.ExecuteScriptAsync($"setContent({safeContent})");
             }
         }
 
-        private void CompileScriptBtn_Click(object sender, RoutedEventArgs e)
+        private async Task<string> GetEditorContent(Microsoft.Web.WebView2.Wpf.WebView2 webView)
+        {
+            try 
+            {
+                var result = await webView.ExecuteScriptAsync("getContent()");
+                // Result is JSON encoded string, need to deserialize
+                return System.Text.Json.JsonSerializer.Deserialize<string>(result) ?? string.Empty;
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"Error getting content: {ex.Message}", Brushes.Red);
+                return string.Empty;
+            }
+        }
+
+        private async void CompileScriptBtn_Click(object sender, RoutedEventArgs e)
         {
             StatusText.Text = "Compiling...";
             ScriptLogBox.Text = "";
@@ -100,17 +106,22 @@ namespace ProtoTestTool
 
             try
             {
-                // 1. Save all files
-                File.WriteAllText(Path.Combine(_workspacePath, "PacketRegistry.csx"), RegistryEditor.Text);
-                File.WriteAllText(Path.Combine(_workspacePath, "PacketHeader.csx"), HeaderEditor.Text);
-                File.WriteAllText(Path.Combine(_workspacePath, "PacketSerializer.csx"), SerializerEditor.Text);
-                File.WriteAllText(Path.Combine(_workspacePath, "PacketHandler.csx"), ContextEditor.Text);
+                // 1. Get content from all editors asynchronously
+                var registryCode = await GetEditorContent(RegistryEditor);
+                var headerCode = await GetEditorContent(HeaderEditor);
+                var serializerCode = await GetEditorContent(SerializerEditor);
+                var handlerCode = await GetEditorContent(ContextEditor);
+
+                // 2. Save all files
+                await File.WriteAllTextAsync(Path.Combine(_workspacePath, "PacketRegistry.csx"), registryCode);
+                await File.WriteAllTextAsync(Path.Combine(_workspacePath, "PacketHeader.csx"), headerCode);
+                await File.WriteAllTextAsync(Path.Combine(_workspacePath, "PacketSerializer.csx"), serializerCode);
+                await File.WriteAllTextAsync(Path.Combine(_workspacePath, "PacketHandler.csx"), handlerCode);
 
                 AppendLog("Files Saved. Starting Compilation...", Brushes.Gray);
 
-                // 2. Request Compilation
+                // 3. Request Compilation
                 OnRequestCompilation?.Invoke(); 
-                
             }
             catch (Exception ex)
             {

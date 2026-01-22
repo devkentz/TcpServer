@@ -8,7 +8,6 @@ using ProtoTestTool.ScriptContract;
 using System.Collections.ObjectModel;
 using Google.Protobuf;
 using Google.Protobuf.Reflection;
-using ProtoTestTool.Roslyn;
 
 
 namespace ProtoTestTool
@@ -20,7 +19,7 @@ namespace ProtoTestTool
         private readonly List<byte> _receiveBuffer = new();
 
         // Roslyn
-        private readonly RoslynService _roslynService;
+        // private readonly RoslynService _roslynService;
         private ScriptEditorWindow? _scriptEditorWindow;
 
         // Editor State
@@ -56,7 +55,7 @@ namespace ProtoTestTool
                 new ToolScriptLogger((msg, color) => { /* Startup Log */ })
             );
 
-            _roslynService = new RoslynService();
+            // _roslynService = new RoslynService(); (Removed)
 
             // Load Workspace Settings
             LoadWorkspaceSettings();
@@ -78,17 +77,11 @@ namespace ProtoTestTool
         {
             try
             {
-                // Initialize Roslyn Editor
-                if (_roslynService?.Host != null)
-                {
-                    await ProtoSourceViewer.InitializeAsync(
-                        _roslynService.Host, 
-                        new RoslynPad.Editor.ClassificationHighlightColors(), 
-                        _workspacePath, 
-                        string.Empty, 
-                        Microsoft.CodeAnalysis.SourceCodeKind.Script
-                    );
-                }
+                // Initialize Roslyn Editor (Removed for Monaco migration)
+                // if (_roslynService?.Host != null)
+                // {
+                //    ProtoSourceViewer is now a TextBox
+                // }
                 // Show Workspace dialog if not set
                 if (string.IsNullOrWhiteSpace(_workspacePath) || !Directory.Exists(_workspacePath))
                 {
@@ -366,7 +359,7 @@ namespace ProtoTestTool
 
             if (_scriptEditorWindow == null || !_scriptEditorWindow.IsLoaded)
             {
-                _scriptEditorWindow = new ScriptEditorWindow(_workspacePath, _scriptLoader, _roslynService);
+                _scriptEditorWindow = new ScriptEditorWindow(_workspacePath, _scriptLoader);
                 
                 _scriptEditorWindow.OnRequestCompilation += () => 
                 {
