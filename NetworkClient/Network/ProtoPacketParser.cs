@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using Google.Protobuf;
@@ -32,14 +33,14 @@ namespace NetworkClient.Network
                 var span = buffer.WrittenSpan;
                 if (span.Length < 4)
                     break;
-
+                
                 int totalSize = BinaryPrimitives.ReadInt32LittleEndian(span);
                 if (buffer.WrittenCount < totalSize)
                     break;
 
                 // 3. Consume actual packet using LittleEndian reads
                 buffer.ReadAdvance(4); // bodySize
-
+                
                 var header = new Header
                 {
                     Flags = (PacketFlags) buffer.ReadByte(),

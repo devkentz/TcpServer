@@ -17,7 +17,7 @@ namespace ProtoTestTool.ScriptContract
         /// <param name="buffer">The incoming sequence of bytes.</param>
         /// <param name="message">The decoded message object (e.g. Google.Protobuf.IMessage).</param>
         /// <returns>True if a message was successfully decoded and consumed from the buffer.</returns>
-        bool TryDecode(ref ReadOnlySequence<byte> buffer, [NotNullWhen(true)] out Packet? message);
+        int TryDecode(ref ReadOnlySpan<byte> buffer, out Packet? message);
 
         /// <summary>
         /// Encodes a message object into a byte array (including framing/length-prefix).

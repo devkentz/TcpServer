@@ -5,6 +5,7 @@
         Title="ProtoTestTool Launcher"
         Height="500" Width="800"
         WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica"
         WindowCornerPreference="Round">
@@ -17,8 +18,10 @@
             <RowDefinition Height="Auto"/> <!-- Footer -->
         </Grid.RowDefinitions>
 
-        <!-- 0. Title Bar -->
-        <ui:TitleBar Grid.Row="0" Title="ProtoTestTool Launcher"/>
+        <!-- 0. Title Bar (Custom, No Buttons) -->
+        <Border Grid.Row="0" Height="30" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+            <TextBlock Text="ProtoTestTool Launcher" VerticalAlignment="Center" Margin="15,0,0,0" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Border>
 
         <!-- 1. Header -->
         <StackPanel Grid.Row="1" Margin="25,10,25,20">
@@ -43,7 +46,7 @@
                     
                     <TextBlock Text="Recent Workspaces" Margin="15,12" FontWeight="Bold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                     
-                    <ListBox x:Name="RecentListBox" Grid.Row="1" Background="Transparent" BorderThickness="0" MouseDoubleClick="RecentListBox_MouseDoubleClick" KeyDown="RecentListBox_KeyDown" Margin="5">
+                    <ListBox x:Name="RecentListBox" Grid.Row="1" Background="Transparent" BorderThickness="0" MouseDoubleClick="RecentListBox_MouseDoubleClick" KeyDown="RecentListBox_KeyDown" Margin="5" VerticalAlignment="Top">
                          <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Grid Margin="5,8">
@@ -64,7 +67,7 @@
             </ui:Card>
 
             <!-- Actions -->
-            <StackPanel Grid.Column="1">
+            <StackPanel Grid.Column="1" VerticalAlignment="Top">
                 <ui:Card MouseLeftButtonUp="NewBtn_Click" Margin="0,0,0,10" Cursor="Hand">
                     <StackPanel Orientation="Horizontal" Margin="5">
                         <ui:SymbolIcon Symbol="AddSquare24" FontSize="24" Foreground="{DynamicResource SystemFillColorSuccessBrush}"/>

@@ -26,6 +26,14 @@ namespace ProtoTestTool
             Activate();
             Focus();
         }
+
+        private void TitleBar_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (e.ButtonState == System.Windows.Input.MouseButtonState.Pressed)
+            {
+                DragMove();
+            }
+        }
         
         // Default constructor required for XAML
         public WorkspaceDialog() : this(null) { }

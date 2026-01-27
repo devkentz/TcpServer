@@ -74,16 +74,17 @@ namespace ProtoTestTool.Network
                         currentBytes = bufferList.ToArray();
                     }
 
-                    var inputSpan = new ReadOnlySequence<byte>(currentBytes);
+                    ReadOnlySpan<byte> inputSpan = currentBytes.AsSpan();
                     
                     // Decode attempt
                     // We must pass a copy of logic reference to track consumption
                     var currentSeq = inputSpan;
-                    
-                    if (_codec.TryDecode(ref currentSeq, out var message))
+
+                    var readSize = _codec.TryDecode(ref currentSeq, out var message);
+                    if(readSize > 0)
                     {
                         // Calculate consumed amount
-                        var consumed = inputSpan.Length - currentSeq.Length;
+                        var consumed = inputSpan.Length - readSize;
                         
                         // Extract RAW bytes for the packet (from the original array)
                         var rawMemory = new ReadOnlyMemory<byte>(currentBytes, 0, (int)consumed);
@@ -95,7 +96,7 @@ namespace ProtoTestTool.Network
                         }
                         
                         // Process the packet
-                        var context = new ProxyPacketContext(message, direction, rawMemory);
+                        var context = new ProxyPacketContext(message!, direction, rawMemory);
                         
                         if (direction == PacketDirection.Inbound)
                             await _pipeline.RunInboundAsync(context);

@@ -1,3 +1,4 @@
+using Google.Protobuf;
 using Microsoft.Extensions.Logging;
 using Network.Server.Front.Actor;
 using Network.Server.Front.Core;
@@ -20,8 +21,11 @@ public class SampleController(ILogger<SampleController> logger)
     {
         logger.LogInformation("Echo 요청 받음: {Message}", req.Message);
 
+            
         return Task.FromResult(Response.Ok(new EchoRes
         {
+            
+            
             Message = $"{req.Message} (서버 응답)",
             Timestamp = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         }));

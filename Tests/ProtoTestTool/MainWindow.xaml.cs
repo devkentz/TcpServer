@@ -8,6 +8,7 @@ using ProtoTestTool.ScriptContract;
 using System.Collections.ObjectModel;
 using Google.Protobuf;
 using Google.Protobuf.Reflection;
+using System.Windows.Controls;
 
 
 namespace ProtoTestTool
@@ -50,8 +51,8 @@ namespace ProtoTestTool
             Closing += MainWindow_Closing;
 
             // Initialize Globals with dummy logger for startup (real logger injected on compilation)
-            ScriptContract.ScriptGlobals.Initialize(
-                new ScriptContract.ScriptStateStore(),
+            ScriptGlobals.Initialize(
+                new ScriptStateStore(),
                 new ToolScriptLogger((msg, color) => { /* Startup Log */ })
             );
 
@@ -83,12 +84,25 @@ namespace ProtoTestTool
                 //    ProtoSourceViewer is now a TextBox
                 // }
                 // Show Workspace dialog if not set
-                if (string.IsNullOrWhiteSpace(_workspacePath) || !Directory.Exists(_workspacePath))
+                // Always show workspace dialog on startup as requested
+                ShowWorkspaceDialog();
+
+                // Resolution-Aware Resizing
+                var screenWidth = SystemParameters.PrimaryScreenWidth;
+                var screenHeight = SystemParameters.PrimaryScreenHeight;
+
+                if (this.Width > screenWidth || this.Height > screenHeight)
                 {
-                    ShowWorkspaceDialog();
+                    this.Width = Math.Min(this.Width, screenWidth * 0.9);
+                    this.Height = Math.Min(this.Height, screenHeight * 0.9);
+                    this.Left = (screenWidth - this.Width) / 2;
+                    this.Top = (screenHeight - this.Height) / 2;
                 }
 
 
+
+                // Initialize Monaco Editors
+                await InitializeMonacoEditors();
             }
             catch (Exception ex)
             {
@@ -96,7 +110,80 @@ namespace ProtoTestTool
             }
         }
 
+        private async Task InitializeMonacoEditors()
+        {
+            var editorPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Monaco", "editor.html");
+            if (!File.Exists(editorPath))
+            {
+                MessageBox.Show($"Editor file not found: {editorPath}");
+                return;
+            }
+
+            var uri = new Uri(editorPath).AbsoluteUri;
+
+            await InitializeSingleEditor(JsonEditorView, uri, "json");
+            await InitializeSingleEditor(HeaderJsonEditorView, uri, "json");
+            await InitializeSingleEditor(ProtoSourceView, uri, "proto");
+            await InitializeSingleEditor(ResponseBoxView, uri, "json");
+        }
+
+        private async Task InitializeSingleEditor(Microsoft.Web.WebView2.Wpf.WebView2 webView, string uri, string language)
+        {
+            await webView.EnsureCoreWebView2Async();
+            webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+            webView.CoreWebView2.Settings.IsScriptEnabled = true;
+            webView.CoreWebView2.Navigate(uri);
+            
+            // Wait for ready (in a real scenario we might wait for the message, 
+            // but for now a small delay + initial setup script is okay)
+            webView.CoreWebView2.WebMessageReceived += (s, args) =>
+            {
+               // dynamic msg = JsonConvert.DeserializeObject(args.TryGetWebMessageAsString());
+               // if (msg.type == "ready") { ... }
+            };
+
+            webView.NavigationCompleted += async (s, e) => 
+            {
+                if (e.IsSuccess)
+                {
+                   await webView.ExecuteScriptAsync($"setLanguage('{language}');");
+                   await webView.ExecuteScriptAsync("setTheme('vs-dark');");
+                }
+            };
+        }
+
+        private async Task SetEditorContentAsync(Microsoft.Web.WebView2.Wpf.WebView2 webView, string content)
+        {
+            if (webView?.CoreWebView2 == null) return;
+            var jsonContent = JsonConvert.SerializeObject(content);
+            await webView.ExecuteScriptAsync($"setContent({jsonContent});");
+        }
+
+        private async Task<string> GetEditorContentAsync(Microsoft.Web.WebView2.Wpf.WebView2 webView)
+        {
+            if (webView?.CoreWebView2 == null) return string.Empty;
+            var result = await webView.ExecuteScriptAsync("getContent();");
+            // Result is JSON encoded string (e.g. "\"content\""), need to unquote
+            if (result == "null" || result == "undefined") return string.Empty;
+             return JsonConvert.DeserializeObject<string>(result) ?? string.Empty;
+        }
+
         #region Workspace Management
+        private void ManagePackagesBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_workspacePath))
+            {
+                FluentMessageBox.ShowError("Please open a workspace first.");
+                return;
+            }
+            var win = new NuGetWindow(_workspacePath);
+            win.Owner = this;
+            win.ShowDialog();
+            
+            // Recompile to pick up new packages? 
+            // Optional: _ = CompileScriptsAsync(false);
+        }
+
         private void WorkspaceBtn_Click(object sender, RoutedEventArgs e)
         {
             ShowWorkspaceDialog();
@@ -167,7 +254,7 @@ namespace ProtoTestTool
         private void LoadWorkspaceConfiguration(string path)
         {
             var config = WorkspaceConfig.Load(path);
-            
+
             // Connection
             IpBox.Text = config.TargetIp;
             PortBox.Text = config.TargetPort.ToString();
@@ -177,32 +264,99 @@ namespace ProtoTestTool
             ProxyTargetIpBox.Text = config.ProxyTargetIp;
             ProxyTargetPortBox.Text = config.ProxyTargetPort.ToString();
 
-            // Proto Path
-            if (!string.IsNullOrWhiteSpace(config.ProtoFolderPath) && Directory.Exists(config.ProtoFolderPath))
+            // Proto Path - Load protos first
+            var protoPath = config.ProtoFolderPath;
+            
+            // Auto-discovery if config is empty
+            if (string.IsNullOrWhiteSpace(protoPath) || !Directory.Exists(protoPath))
             {
-                _protoFolderPath = config.ProtoFolderPath;
-                 // Asynchronously load protos without blocking UI
-                _ = LoadProtosFromFolderAsync(_protoFolderPath);
+                try
+                {
+                    if (Directory.GetFiles(path, "*.proto", SearchOption.AllDirectories).Length > 0)
+                    {
+                        protoPath = path;
+                        // Optional: Update config automatically?
+                        // config.ProtoFolderPath = path;
+                        // config.Save(path);
+                    }
+                }
+                catch {}
+            }
+
+            if (!string.IsNullOrWhiteSpace(protoPath) && Directory.Exists(protoPath))
+            {
+                _protoFolderPath = protoPath;
+                // Asynchronously load protos and then compile scripts
+                _ = LoadWorkspaceAsync(path, protoPath);
+            }
+            else
+            {
+                // No proto folder, just compile scripts
+                _ = CompileWorkspaceScriptsAsync(path);
+            }
+        }
+
+        private async Task LoadWorkspaceAsync(string workspacePath, string protoFolderPath)
+        {
+            try
+            {
+                // 1. Load Proto files first
+                await LoadProtosFromFolderAsync(protoFolderPath);
+
+                // 2. Then compile CSX scripts
+                await CompileWorkspaceScriptsAsync(workspacePath);
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => AppendLog($"[Error] Workspace load failed: {ex.Message}", Brushes.Red));
+            }
+        }
+
+        private async Task CompileWorkspaceScriptsAsync(string workspacePath)
+        {
+            if (string.IsNullOrWhiteSpace(workspacePath) || !Directory.Exists(workspacePath)) return;
+
+            // Check if required script files exist
+            // Check if required script files exist
+            var registryPath = Path.Combine(workspacePath, "PacketRegistry.cs");
+            if (!File.Exists(registryPath)) registryPath = Path.Combine(workspacePath, "PacketRegistry.csx");
+            
+            var serializerPath = Path.Combine(workspacePath, "PacketSerializer.cs");
+            if (!File.Exists(serializerPath)) serializerPath = Path.Combine(workspacePath, "PacketSerializer.csx");
+
+            if (!File.Exists(registryPath) || !File.Exists(serializerPath))
+            {
+                Dispatcher.Invoke(() => AppendLog("[Info] Required CSX files not found. Skipping auto-compile.", Brushes.Gray));
+                return;
+            }
+
+            try
+            {
+                Dispatcher.Invoke(() => AppendLog("[Workspace] Auto-compiling scripts...", Brushes.DeepSkyBlue));
+                await CompileScriptsAsync(workspacePath, (msg, color) => Dispatcher.Invoke(() => AppendLog(msg, color)));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => AppendLog($"[Error] Auto-compile failed: {ex.Message}", Brushes.Red));
             }
         }
 
         private void SaveWorkspaceConfiguration()
         {
-            if (string.IsNullOrWhiteSpace(_workspacePath)) return;
+            if (string.IsNullOrWhiteSpace(_workspacePath) || !Directory.Exists(_workspacePath)) return;
 
             var config = new WorkspaceConfig
             {
                 TargetIp = IpBox.Text,
-                ProtoFolderPath = _protoFolderPath // needs to be tracked
+                ProtoFolderPath = _protoFolderPath,
+                ProxyTargetIp = ProxyTargetIpBox.Text
             };
 
             if (int.TryParse(PortBox.Text, out var port)) config.TargetPort = port;
             if (int.TryParse(ProxyLocalPortBox.Text, out var pLocal)) config.ProxyLocalPort = pLocal;
             if (int.TryParse(ProxyTargetPortBox.Text, out var pTarget)) config.ProxyTargetPort = pTarget;
-            config.ProxyTargetIp = ProxyTargetIpBox.Text;
 
             config.Save(_workspacePath);
-            Dispatcher.Invoke(() => AppendLog($"[Config] Saved to {_workspacePath}", Brushes.Gray));
         }
 
         // Field to track current proto folder
@@ -386,6 +540,15 @@ namespace ProtoTestTool
             }
         }
 
+        private void ScriptListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (e.AddedItems.Count > 0)
+            {
+                OpenScriptEditor_Click(sender, e);
+                // Keeping selection is fine as visual feedback of "last clicked"
+            }
+        }
+
         private void UpdateConnectionState(bool connected)
         {
             ConnectBtn.IsEnabled = !connected;
@@ -395,81 +558,88 @@ namespace ProtoTestTool
         #endregion
 
         #region Sending & Receiving
-        private void PacketListBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        private async void PacketListBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            if (PacketListBox.SelectedItem is PacketConvertor convertor)
+            try
             {
+                if (PacketListBox.SelectedItem is not PacketConvertor convertor) return;
+
                 // Generate Default JSON
                 var (_, json) = convertor.DefaultJsonString();
-                JsonEditor.Text = json;
+                await SetEditorContentAsync(JsonEditorView, json);
                 SendBtn.IsEnabled = _client != null && _client.IsConnected;
-                
-                _currentEditingFile = convertor.Name; 
+
+                _currentEditingFile = convertor.Name;
 
                 // Generate Default JSON for Header
-                if (_headerAssembly != null)
-                {
-                    var headerType = _headerAssembly.GetTypes().FirstOrDefault(t => typeof(IHeader).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
-                    if (headerType == null) headerType = _headerAssembly.GetTypes().FirstOrDefault(t => t.Name == "Header");
+                await LoadHeaderJsonAsync();
 
-                    if (headerType != null)
-                    {
-                        try
-                        {
-                            var headerInstance = Activator.CreateInstance(headerType);
-                            var headerJson = JsonConvert.SerializeObject(headerInstance, Formatting.Indented);
-                            HeaderJsonEditor.Text = headerJson;
-                            AppendLog($"[Debug] Generated Header JSON ({headerJson.Length} chars)", Brushes.Gray);
-                        }
-                        catch (Exception ex)
-                        {
-                            HeaderJsonEditor.Text = "{}";
-                            AppendLog($"[Error] Header Serialization Failed: {ex.Message}", Brushes.Red);
-                        }
-                    }
-                    else
-                    {
-                        HeaderJsonEditor.Text = "{}";
-                        AppendLog($"[Warning] 'Header' type not found in assembly.", Brushes.Orange);
-                    }
+                // Display Proto Source
+                await LoadProtoSourceAsync(convertor);
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[Error] Selection changed: {ex.Message}", Brushes.Red);
+            }
+        }
+
+        private async Task LoadHeaderJsonAsync()
+        {
+            if (_headerAssembly == null)
+            {
+                await SetEditorContentAsync(HeaderJsonEditorView, "{}");
+                return;
+            }
+
+            var headerType = _headerAssembly.GetTypes().FirstOrDefault(t => typeof(IHeader).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface)
+                          ?? _headerAssembly.GetTypes().FirstOrDefault(t => t.Name == "Header");
+
+            if (headerType == null)
+            {
+                await SetEditorContentAsync(HeaderJsonEditorView, "{}");
+                return;
+            }
+
+            try
+            {
+                var headerInstance = Activator.CreateInstance(headerType);
+                var headerJson = JsonConvert.SerializeObject(headerInstance, Formatting.Indented);
+                await SetEditorContentAsync(HeaderJsonEditorView, headerJson);
+            }
+            catch
+            {
+                await SetEditorContentAsync(HeaderJsonEditorView, "{}");
+            }
+        }
+
+        private async Task LoadProtoSourceAsync(PacketConvertor convertor)
+        {
+            try
+            {
+                var descriptorProp = convertor.Type.GetProperty("Descriptor", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (descriptorProp?.GetValue(null) is not MessageDescriptor descriptor)
+                {
+                    await SetEditorContentAsync(ProtoSourceView, "// Descriptor not found");
+                    return;
+                }
+
+                var protoFileName = descriptor.File.Name;
+                var match = _loadedProtoFiles.FirstOrDefault(path =>
+                    path.EndsWith(protoFileName, StringComparison.OrdinalIgnoreCase) ||
+                    Path.GetFileName(path).Equals(Path.GetFileName(protoFileName), StringComparison.OrdinalIgnoreCase));
+
+                if (match != null && File.Exists(match))
+                {
+                    await SetEditorContentAsync(ProtoSourceView, await File.ReadAllTextAsync(match));
                 }
                 else
                 {
-                    HeaderJsonEditor.Text = "{}";
-                } 
-
-                // Display Proto Source
-                try
-                {
-                    // Use Reflection to get Descriptor
-                    var descriptorProp = convertor.Type.GetProperty("Descriptor", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                    if (descriptorProp != null)
-                    {
-                        if (descriptorProp.GetValue(null) is MessageDescriptor descriptor)
-                        {
-                            var protoFileName = descriptor.File.Name; // e.g. "Common.proto" or "Folder/Common.proto"
-                            
-                            // Find matching file in _loadedProtoFiles
-                            // _loadedProtoFiles contains Absolute Paths
-                            var match = _loadedProtoFiles.FirstOrDefault(path => 
-                                path.EndsWith(protoFileName, StringComparison.OrdinalIgnoreCase) || 
-                                Path.GetFileName(path).Equals(Path.GetFileName(protoFileName), StringComparison.OrdinalIgnoreCase));
-
-                            if (match != null && File.Exists(match))
-                            {
-                                ProtoSourceViewer.Text = File.ReadAllText(match);
-                            }
-                            else
-                            {
-                                ProtoSourceViewer.Text = $"// Source file not found for: {protoFileName}\n// Loaded files: {_loadedProtoFiles.Count}";
-                            }
-                        }
-                    }
+                    await SetEditorContentAsync(ProtoSourceView, $"// Source file not found for: {protoFileName}");
                 }
-                catch (Exception ex)
-                {
-                    ProtoSourceViewer.Text = $"// Error loading source: {ex.Message}";
-                }
+            }
+            catch (Exception ex)
+            {
+                await SetEditorContentAsync(ProtoSourceView, $"// Error loading source: {ex.Message}");
             }
         }
         
@@ -502,7 +672,7 @@ namespace ProtoTestTool
                     return;
                 }
 
-                var json = JsonEditor.Text;
+                var json = await GetEditorContentAsync(JsonEditorView);
 
                 if (JsonConvert.DeserializeObject(json, type) is not IMessage message) 
                     return;
@@ -543,7 +713,7 @@ namespace ProtoTestTool
                 try 
                 {
                     // Use HeaderJsonEditor.Text
-                    headerObj = (IHeader?)JsonConvert.DeserializeObject(HeaderJsonEditor.Text, headerType);
+                    headerObj = (IHeader?)JsonConvert.DeserializeObject(await GetEditorContentAsync(HeaderJsonEditorView), headerType);
                 }
                 catch(Exception ex)
                 {
@@ -625,20 +795,22 @@ namespace ProtoTestTool
             while (_receiveBuffer.Count > 0)
             {
                 var currentBytes = _receiveBuffer.ToArray();
-                var seq = new System.Buffers.ReadOnlySequence<byte>(currentBytes);
-                var originalSeq = seq; // copy struct
-
-                try 
+                ReadOnlySpan<byte> span = currentBytes.AsSpan();
+                
+                try
                 {
-                    if (ScriptGlobals.Codec.TryDecode(ref seq, out var packet))
+                    var readSize = ScriptGlobals.Codec.TryDecode(ref span, out var packet);
+                    if(readSize > 0)
                     {
-                        var consumed = originalSeq.Length - seq.Length;
+                        var consumed = span.Length - readSize;
                         _receiveBuffer.RemoveRange(0, (int)consumed);
 
                         if (packet != null)
                         {
-                            var json = JsonConvert.SerializeObject(packet, Formatting.Indented);
-                            AppendLog($"[Recv] {packet.GetType().Name}:\n{json}", Brushes.LimeGreen);
+                            var json = JsonConvert.SerializeObject(packet.Message, Formatting.Indented);
+                            AppendLog($"[Recv] {packet.Message.GetType().Name} ({consumed} bytes)", Brushes.LimeGreen);
+                            // Update Response Inspector
+                             _ = SetEditorContentAsync(ResponseBoxView, json);
                         }
                     }
                     else

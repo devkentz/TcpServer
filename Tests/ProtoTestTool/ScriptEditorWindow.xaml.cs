@@ -53,17 +53,48 @@ namespace ProtoTestTool
         {
             try
             {
-                await webView.EnsureCoreWebView2Async();
-                webView.Source = new Uri(url);
+                // Handshake Mechanism
+                var tcs = new TaskCompletionSource<bool>();
                 
-                // Wait for navigation to complete
-                webView.NavigationCompleted += async (s, e) =>
+                webView.WebMessageReceived += (s, e) =>
                 {
-                    if (e.IsSuccess)
+                    try
                     {
-                        await LoadFileIntoEditor(webView, fileName);
+                        // Check JSON property directly for object messages
+                        var json = e.WebMessageAsJson;
+                        if (!string.IsNullOrEmpty(json))
+                        {
+                             if (json.Contains("\"type\":\"ready\"") || json.Contains("\"ready\""))
+                             {
+                                 tcs.TrySetResult(true);
+                             }
+                             else
+                             {
+                                 // Log other messages (extensions/debug)
+                                 AppendLog($"[Editor JS] {json}", Brushes.Cyan);
+                             }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        AppendLog($"[Editor Msg Error] {ex.Message}", Brushes.Red);
                     }
                 };
+
+                webView.Source = new Uri(url);
+
+                // Wait for ready signal (timeout 3s)
+                var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(3000));
+                if (completedTask == tcs.Task)
+                {
+                     await LoadFileIntoEditor(webView, fileName);
+                }
+                else
+                {
+                     AppendLog($"[Editor] Timeout waiting for editor ready: {fileName}", Brushes.Orange);
+                     // Fallback try
+                     await LoadFileIntoEditor(webView, fileName);
+                }
             }
             catch (Exception ex)
             {
@@ -81,6 +112,40 @@ namespace ProtoTestTool
                 var safeContent = System.Text.Json.JsonSerializer.Serialize(content);
                 await webView.ExecuteScriptAsync($"setContent({safeContent})");
             }
+        }
+
+        private void Tab_Checked(object sender, RoutedEventArgs e)
+        {
+            if (RegistryEditor == null) return; // Not initialized yet
+
+            var button = sender as System.Windows.Controls.Primitives.ToggleButton;
+            if (button == null || button.Tag == null) return;
+
+            string targetName = button.Tag.ToString()!;
+            
+            // Hide all (Collapse/Hidden)
+            // Note: We use Hidden initially for loading, but switching to Collapsed/Visible logic here
+            // To ensure state is kept, we just show one.
+            // Wait, if we use Collapsed, does it un-initialize? 
+            // In Grid, Collapsed just removes from layout. It should be fine.
+            
+            SetVisibility(RegistryEditor, targetName == "RegistryEditor");
+            SetVisibility(HeaderEditor, targetName == "HeaderEditor");
+            SetVisibility(SerializerEditor, targetName == "SerializerEditor");
+            SetVisibility(ContextEditor, targetName == "ContextEditor");
+        }
+
+        private void SetVisibility(Microsoft.Web.WebView2.Wpf.WebView2 webView, bool isVisible)
+        {
+            if (webView == null) return;
+            // Use Visibility.Hidden to keep layout/rendering state or Collapsed?
+            // Collapsed removes it from layout space. Hidden keeps space.
+            // Since they are in the same Grid cell (overlapping), Hidden is fine if we want them to stack?
+            // No, Hidden takes space. Does Grid center them?
+            // They are in Grid Row 1. If Hidden, they take space.
+            // If Collapsed, they don't.
+            // Let's use Collapsed for the inactive ones.
+            webView.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private async Task<string> GetEditorContent(Microsoft.Web.WebView2.Wpf.WebView2 webView)
@@ -112,6 +177,18 @@ namespace ProtoTestTool
                 var serializerCode = await GetEditorContent(SerializerEditor);
                 var handlerCode = await GetEditorContent(ContextEditor);
 
+                // Validation: Prevent overwriting with empty content if load failed
+                if (string.IsNullOrWhiteSpace(registryCode) || string.IsNullOrWhiteSpace(headerCode) || 
+                    string.IsNullOrWhiteSpace(serializerCode) || string.IsNullOrWhiteSpace(handlerCode))
+                {
+                    AppendLog("Error: One or more editors are empty. Aborting save to prevent data loss.", Brushes.Red);
+                    
+                    // Allow compilation of existing files? Or Stop?
+                    // Better to stop and ask user to reload/check.
+                    StatusText.Text = "Save Aborted";
+                    return; 
+                }
+
                 // 2. Save all files
                 await File.WriteAllTextAsync(Path.Combine(_workspacePath, "PacketRegistry.csx"), registryCode);
                 await File.WriteAllTextAsync(Path.Combine(_workspacePath, "PacketHeader.csx"), headerCode);
@@ -122,6 +199,9 @@ namespace ProtoTestTool
 
                 // 3. Request Compilation
                 OnRequestCompilation?.Invoke(); 
+
+                // 4. Update Completions (if successful, types will be in ScriptGlobals or ProtoLoaderManager)
+                // We'll give it a small delay or call this explicitly after compilation finishes in MainWindow
             }
             catch (Exception ex)
             {
@@ -132,6 +212,14 @@ namespace ProtoTestTool
             {
                 CompileScriptBtn.IsEnabled = true;
             }
+        }
+
+        public async Task UpdateCompletionsAsync(string json)
+        {
+             await RegistryEditor.ExecuteScriptAsync($"updateCompletions({json})");
+             await HeaderEditor.ExecuteScriptAsync($"updateCompletions({json})");
+             await SerializerEditor.ExecuteScriptAsync($"updateCompletions({json})");
+             await ContextEditor.ExecuteScriptAsync($"updateCompletions({json})");
         }
         
         public event Action? OnRequestCompilation;

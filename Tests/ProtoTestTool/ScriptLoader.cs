@@ -64,29 +64,27 @@ namespace ProtoTestTool
         {
             var result = new PreProcessResult { Code = code };
             
-            // Check for #r "nuget:..."
+            // Check for #r directives (nuget or assembly) and #load
             var lines = code.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-            var nugetLines = lines.Where(l => l.TrimStart().StartsWith("#r \"nuget:", StringComparison.OrdinalIgnoreCase)).ToList();
+            var refLines = lines.Where(l => l.TrimStart().StartsWith("#r", StringComparison.OrdinalIgnoreCase)).ToList();
             var loadLines = lines.Where(l => l.TrimStart().StartsWith("#load", StringComparison.OrdinalIgnoreCase)).ToList();
 
-            if (logger != null && (nugetLines.Any() || loadLines.Any()))
+            if (logger != null && (refLines.Any() || loadLines.Any()))
             {
-                logger($"[PreProcess] Found {nugetLines.Count} nuget refs, {loadLines.Count} load directives in {Path.GetFileName(scriptPath)}");
+                logger($"[PreProcess] Found {refLines.Count} refs, {loadLines.Count} load directives in {Path.GetFileName(scriptPath)}");
             }
 
-            if (nugetLines.Any() || loadLines.Any())
+            if (refLines.Any() || loadLines.Any())
             {
-                // Comment out nuget lines in the code to satisfy Roslyn
+                // Comment out directives to satisfy Roslyn (Regular mode)
                 var sb = new StringBuilder();
                 foreach (var line in lines)
                 {
-                    if (line.TrimStart().StartsWith("#r \"nuget:", StringComparison.OrdinalIgnoreCase))
+                    var trimmed = line.TrimStart();
+                    if (trimmed.StartsWith("#r", StringComparison.OrdinalIgnoreCase) || 
+                        trimmed.StartsWith("#load", StringComparison.OrdinalIgnoreCase))
                     {
                         sb.AppendLine($"// {line}"); // Comment out
-                    }
-                    else if (line.TrimStart().StartsWith("#load", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sb.AppendLine($"// {line}"); // Comment out load directives to prevent double loading
                     }
                     else
                     {

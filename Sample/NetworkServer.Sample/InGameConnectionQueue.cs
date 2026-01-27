@@ -77,7 +77,7 @@ public class InGameConnectionQueue : IInGameConnectionQueue, IDisposable
             await _semaphoreSlim.WaitAsync(_cancellationToken.Token);
 
             var req = (LoginGameReq) message.Message;
-
+            
             var  database = _database.GetDatabase();
             //같은 유저에 대한, 로그인 처리가 중복으로 일어나지 않게 하기 위한, 레디스를 이용한 분산락
             await using var lockObj = await database.TryAcquireLockAsync(req.ExternalId);

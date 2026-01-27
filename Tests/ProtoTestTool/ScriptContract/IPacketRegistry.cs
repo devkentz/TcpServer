@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Google.Protobuf;
 
 namespace ProtoTestTool.ScriptContract
 {
@@ -24,5 +25,7 @@ namespace ProtoTestTool.ScriptContract
         int GetMessageId(Type type);
 
         void Register(int id, Type type);
+        
+        MessageParser GetParserById(int id);
     }
 }
