@@ -79,16 +79,11 @@ public class InGameConnectionQueue : IInGameConnectionQueue, IDisposable
 
             var database = _database.GetDatabase();
 
-            //같은 유저에 대한, 로그인 처리가 중복으로 일어나지 않게 하기 위한, 레디스를 이용한 분산락
             await using var lockObj = await database.TryAcquireLockAsync(req.ExternalId);
             if (lockObj == null)
                 throw new Exception($"Unable to acquire lock for {req.ExternalId}");
 
-            //TODO : DB처리
-            //TODO : REDIS에 유저 세션 객체 저장 & 중복접속 처리
-
             _logger.LogInformation("Processing connection request for session {SessionId}", session.SessionId);
-
 
             var userActor = new UserActor(_logger, session, _uniqueIdGenerator.NextId(), req.ExternalId, _serviceProvider);
 
@@ -98,8 +93,7 @@ public class InGameConnectionQueue : IInGameConnectionQueue, IDisposable
                 existingActor.Session.Disconnect();
             }
             
-
-            session.SendToClient(new Header(msgId: LoginGameRes.MsgId, msgSeq: session.SequenceId++), new LoginGameRes {Success = true});
+            session.SendToClient(new Header(msgId: LoginGameRes.MsgId, msgSeq: session.SequenceId++, requestId: message.Header.RequestId), new LoginGameRes {Success = true});
         }
         catch (OperationCanceledException e)
         {
@@ -108,7 +102,7 @@ public class InGameConnectionQueue : IInGameConnectionQueue, IDisposable
         catch (Exception e)
         {
             _logger.LogInformation(e, "error {SessionId}", session.SessionId);
-            session.SendToClient(new Header(flags: PacketFlags.HasError, errorCode: (ushort) ErrorCode.ServerError), new LoginGameRes());
+            session.SendToClient(new Header(flags: PacketFlags.HasError, errorCode: (ushort) ErrorCode.ServerError, requestId: message.Header.RequestId), new LoginGameRes());
         }
         finally
         {

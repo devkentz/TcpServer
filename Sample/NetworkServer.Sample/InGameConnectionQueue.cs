@@ -100,7 +100,7 @@ public class InGameConnectionQueue : IInGameConnectionQueue, IDisposable
             _actorManager.TryAddActor(userActor);
             
             
-            session.SendToClient(new Header(msgId: LoginGameRes.MsgId, msgSeq: session.SequenceId++), new LoginGameRes {Success = true});
+            session.SendToClient(new Header(msgId: LoginGameRes.MsgId, msgSeq: session.SequenceId++, requestId: message.Header.RequestId), new LoginGameRes {Success = true});
         }
         catch (OperationCanceledException e)
         {
@@ -109,7 +109,7 @@ public class InGameConnectionQueue : IInGameConnectionQueue, IDisposable
         catch (Exception e)
         {
             _logger.LogInformation(e, "error {SessionId}", session.SessionId);
-            session.SendToClient(new Header(flags: PacketFlags.HasError, errorCode: (ushort) ErrorCode.ServerError), new LoginGameRes());
+            session.SendToClient(new Header(flags: PacketFlags.HasError, requestId: message.Header.RequestId, errorCode: (ushort) ErrorCode.ServerError), new LoginGameRes());
         }
         finally
         {

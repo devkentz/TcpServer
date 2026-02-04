@@ -67,7 +67,7 @@ public class NetworkSession(
     {
         try
         {
-            _buffer.Write(buffer.AsSpan()[(int) offset .. (int) size]);
+            _buffer.Write(buffer.AsSpan((int) offset, (int) size));
             var packets = _packetParser.Parse(_buffer);
 
             foreach (var packet in packets) 
@@ -106,7 +106,7 @@ public class NetworkSession(
         {
             Span<byte> stackBuffer = stackalloc byte[size];
             var length = (header, message).WriteToSpan(stackBuffer, size);
-            base.SendAsync(stackBuffer[..length]);
+            base.SendAsync(stackBuffer.Slice(0, length));
         }
     }
  

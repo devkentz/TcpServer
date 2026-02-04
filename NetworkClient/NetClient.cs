@@ -36,10 +36,10 @@ namespace NetworkClient
         private readonly MessageHandler _handler;
 
         private TaskCompletionSource<bool>? _connectTcs;
-        private TaskCompletionSource<IMessage>? _requestTcs = null;
+        private readonly ConcurrentDictionary<ushort, TaskCompletionSource<IMessage>> _pendingRequests = new();
 
         private readonly int _timeoutMs = 15_000_000;
-        private ushort _msgSeq = 0;
+        private int _requestIdCounter = 0;
 
         public ClientState State => IsConnected ? ClientState.Connected : ClientState.Disconnected;
 
@@ -119,7 +119,7 @@ namespace NetworkClient
                 return;
             }
 
-            EnqueueSend(new Header(msgId: msgId, msgSeq: _msgSeq), packet);
+            EnqueueSend(new Header(msgId: msgId, msgSeq: 0, requestId: 0), packet);
         }
 
         public async Task<TResponse> RequestAsync<TResponse>(IMessage request, CancellationToken cancellationToken = default)
@@ -141,8 +141,21 @@ namespace NetworkClient
                 throw new NetClientException((ushort) InternalErrorCode.InvalidMessage, request);
             }
 
-            _requestTcs = new TaskCompletionSource<IMessage>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+            // Generate RequestId (1-65535)
+            ushort requestId;
+            do
+            {
+                requestId = (ushort)(Interlocked.Increment(ref _requestIdCounter) & 0xFFFF);
+            } while (requestId == 0);
+            
+            
+
+            var tcs = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            
+            if (!_pendingRequests.TryAdd(requestId, tcs))
+            {
+                throw new InvalidOperationException($"RequestId collision: {requestId}");
+            }
 
             using var timeoutCts = new CancellationTokenSource(_timeoutMs);
 
@@ -151,15 +164,19 @@ namespace NetworkClient
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                     cancellationToken, timeoutCts.Token);
 
-                EnqueueSend(new Header(msgId: msgId, msgSeq: _msgSeq), request);
+                EnqueueSend(new Header(msgId: msgId, msgSeq: 0, requestId: requestId), request);
 
-                return await _requestTcs.Task
+                return await tcs.Task
                     .WaitAsync(linkedCts.Token)
                     .ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
             {
                 throw new TimeoutException($"Request timed out after {_timeoutMs}ms");
+            }
+            finally
+            {
+                _pendingRequests.TryRemove(requestId, out _);
             }
         }
 
@@ -223,6 +240,11 @@ namespace NetworkClient
 
 
             _connectTcs?.SetCanceled();
+            
+            foreach (var tcs in _pendingRequests.Values)
+                tcs.TrySetCanceled();
+            
+            _pendingRequests.Clear();
         }
 
         protected override void OnError(SocketError error)
@@ -241,11 +263,13 @@ namespace NetworkClient
 
                 foreach (var packet in packets)
                 {
-                    if (_requestTcs != null && packet.Header.MsgSeq > 0)
+                    if (packet.Header.RequestId > 0)
                     {
-                        _msgSeq = packet.Header.MsgSeq;
-                        _requestTcs?.TrySetResult(packet.Message);
-                        continue;
+                        if (_pendingRequests.TryRemove(packet.Header.RequestId, out var tcs))
+                        {
+                            tcs.TrySetResult(packet.Message);
+                            continue;
+                        }
                     }
 
                     _recvList.Enqueue(packet);
@@ -264,8 +288,11 @@ namespace NetworkClient
             _receiveBuffer.Dispose();
 
             _connectTcs?.TrySetCanceled();
-            _requestTcs?.TrySetCanceled();
-            _requestTcs = null;
+            
+            foreach (var tcs in _pendingRequests.Values)
+                tcs.TrySetCanceled();
+                
+            _pendingRequests.Clear();
         }
     }
 }

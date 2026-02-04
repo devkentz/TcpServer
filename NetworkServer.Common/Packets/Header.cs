@@ -35,12 +35,14 @@ public class Header
     public Header(PacketFlags flags = PacketFlags.None,
         int msgId = 0,
         ushort msgSeq = 0,
+        ushort requestId = 0,
         ushort errorCode = 0,
         int originalSize = 0)
     {
         Flags = flags;
         MsgId = msgId;
         MsgSeq = msgSeq;
+        RequestId = requestId;
         ErrorCode = errorCode;
         OriginalSize = originalSize;
     }
@@ -51,12 +53,14 @@ public class Header
 
     public ushort MsgSeq { get; set; } //   reconnect hand over
 
+    public ushort RequestId { get; set; } // Request-Response matching
+
     public ushort ErrorCode { get; set; } //optional
 
     public int OriginalSize { get; set; } //optional
 
     // first 4byte => bodySize
-    private const int FixedSize = sizeof(int) /*msg_id */ + sizeof(int) /*total_size*/ + sizeof(byte) /*flags*/ + sizeof(ushort) /*msg_seq*/;
+    private const int FixedSize = sizeof(int) /*msg_id*/ + sizeof(int) /*total_size*/ + sizeof(byte) /*flags*/ + sizeof(ushort) /*msg_seq*/ + sizeof(ushort) /*request_id*/;
 
     public int GetSize()
     {
@@ -65,7 +69,7 @@ public class Header
 
     public override string ToString()
     {
-        return $"MsgId: {MsgId}, MsgSeq: {MsgSeq}, ErrorCode: {ErrorCode}, OriginalSize: {OriginalSize}";
+        return $"MsgId: {MsgId}, MsgSeq: {MsgSeq}, RequestId: {RequestId}, ErrorCode: {ErrorCode}, OriginalSize: {OriginalSize}";
     }
 
     //Flag helpers
@@ -103,6 +107,10 @@ public static class PacketExtensions
 
         // msgSeq
         BinaryPrimitives.WriteUInt16LittleEndian(buffer[offset..], packet.header.MsgSeq);
+        offset += 2;
+        
+        // requestId
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer[offset..], packet.header.RequestId);
         offset += 2;
         
         if(packet.header.HasError)

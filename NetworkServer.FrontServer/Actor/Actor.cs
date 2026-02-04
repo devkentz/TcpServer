@@ -30,6 +30,7 @@ public class Actor : IActor, IDisposable
         await using var scope = _rootProvider.CreateAsyncScope();
         var response = await _handler.Handling(scope.ServiceProvider, this, actorMessage);
         response.Header.MsgSeq = _session.SequenceId;
+        response.Header.RequestId = actorMessage.Header.RequestId;
         _session.SendToClient(response.Header, response.Message);
     }
 

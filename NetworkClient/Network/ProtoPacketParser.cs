@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using Google.Protobuf;
+using Network.Server;
 using Network.Server.Common.Memory;
 using Network.Server.Common.Packets;
 using NetworkServer.ProtoGenerator;
@@ -20,7 +21,7 @@ namespace NetworkClient.Network
         public Header Header { get; init; }
         public IMessage Message { get; init; }
     }
-    
+
     public sealed class ProtoPacketParser : IPacketParser<NetworkPacket>
     {
         public IReadOnlyList<NetworkPacket> Parse(ArrayPoolBufferWriter buffer)
@@ -33,19 +34,23 @@ namespace NetworkClient.Network
                 var span = buffer.WrittenSpan;
                 if (span.Length < 4)
                     break;
-                
+
                 int totalSize = BinaryPrimitives.ReadInt32LittleEndian(span);
                 if (buffer.WrittenCount < totalSize)
                     break;
 
+                if (0 >= totalSize || PacketDefine.MaxPacketSize <= totalSize)
+                    throw new Exception($"Invalid Packet Length : {totalSize}");
+
                 // 3. Consume actual packet using LittleEndian reads
                 buffer.ReadAdvance(4); // bodySize
-                
+
                 var header = new Header
                 {
                     Flags = (PacketFlags) buffer.ReadByte(),
                     MsgId = buffer.ReadInt32LittleEndian(),
-                    MsgSeq = buffer.ReadUInt16LittleEndian()
+                    MsgSeq = buffer.ReadUInt16LittleEndian(),
+                    RequestId = buffer.ReadUInt16LittleEndian()
                 };
 
                 if (header.Flags.HasFlagFast(PacketFlags.HasError))
