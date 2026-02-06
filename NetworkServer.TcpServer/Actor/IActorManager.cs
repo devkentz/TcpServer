@@ -13,7 +13,7 @@ public interface IActorManager
 
 public class ActorManager : IActorManager
 {
-    private readonly ConcurrentDictionary<long, IActor> _actorsById = new();
+    private readonly ConcurrentDictionary<long, IActor> _actorsById = [];
 
     public IActor? GetActor(long actorId)
     {

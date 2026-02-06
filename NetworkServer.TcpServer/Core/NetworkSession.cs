@@ -18,7 +18,7 @@ public class NetworkSession(
     long sessionId,
     ClientSocketServer clientSocketServer,
     ILogger<NetworkSession> logger)
-    : TcpSession(clientSocketServer)
+    : TcpSession(clientSocketServer), IDisposable
 {
     public ushort SequenceId { get; set; } = 0;
     
@@ -52,13 +52,13 @@ public class NetworkSession(
 
     protected override void OnConnecting()
     {
-        logger.LogDebug($"Session OnConnected - [sid:{SessionId}]");
+        logger.LogDebug("Session connected - sid: {SessionId}", SessionId);
         Connected?.Invoke(sessionId, EventArgs.Empty);
     }
 
     protected override void OnDisconnected()
     {
-        logger.LogDebug($"Session  OnDisConnected - [sid:{SessionId}]");
+        logger.LogDebug("Session disconnected - sid: {SessionId}", SessionId);
         Disconnected?.Invoke(this, EventArgs.Empty);
     }
  
@@ -82,7 +82,7 @@ public class NetworkSession(
 
     protected override void OnError(SocketError error)
     {
-        logger.LogError($"socket caught an error - [codeCode:{error}]");
+        logger.LogError("Socket error - ErrorCode: {ErrorCode}, SessionId: {SessionId}", error, SessionId);
     }
 
     public void SendToClient(Header header, IMessage message)
@@ -117,5 +117,11 @@ public class NetworkSession(
     {
         Debug.Assert(_actor != null);
         _actor.Push(message);
+    }
+
+    public new void Dispose()
+    {
+        _buffer?.Dispose();
+        base.Dispose();
     }
 }

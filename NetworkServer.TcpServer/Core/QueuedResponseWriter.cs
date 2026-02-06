@@ -45,7 +45,7 @@ public class QueuedResponseWriter<T> : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError($"error occurred on write to client. ex : {ex}");
+            _logger.LogError(ex, "Error occurred while writing to client");
         }
     }
 

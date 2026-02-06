@@ -1,26 +1,17 @@
 ﻿using System;
-using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using Google.Protobuf;
-using Network.Server;
 using Network.Server.Common.Memory;
 using Network.Server.Common.Packets;
 using NetworkServer.ProtoGenerator;
 
 namespace NetworkClient.Network
 {
-    public class NetworkPacket
-    {
-        public NetworkPacket(Header header, IMessage message)
-        {
-            Header = header;
-            Message = message;
-        }
-
-        public Header Header { get; init; }
-        public IMessage Message { get; init; }
-    }
+    /// <summary>
+    /// 네트워크 패킷 (불변 record)
+    /// </summary>
+    public sealed record NetworkPacket(Header Header, IMessage Message);
 
     public sealed class ProtoPacketParser : IPacketParser<NetworkPacket>
     {

@@ -12,6 +12,7 @@ namespace Network.Server.Tcp.Core
         private readonly ClientSocketServer _clientSocketServer;
         private readonly UniqueIdGenerator _idGenerator;
         private readonly IConnectionHandler _connectionHandler;
+        private readonly ILoggerFactory _loggerFactory;
 
         public TcpServer(
             IOptions<TcpServerConfig> serverConfig,
@@ -19,17 +20,19 @@ namespace Network.Server.Tcp.Core
             ILogger<TcpServer> logger,
             IServiceProvider serviceProvider,
             UniqueIdGenerator idGenerator,
-            IConnectionHandler connectionHandler)
+            IConnectionHandler connectionHandler,
+            ILoggerFactory loggerFactory)
             : base(actorManager, logger, serviceProvider)
         {
             _idGenerator = idGenerator;
             _connectionHandler = connectionHandler;
+            _loggerFactory = loggerFactory;
             _clientSocketServer = new ClientSocketServer(CreateSession, serverConfig.Value);
         }
 
         private NetworkSession CreateSession(ClientSocketServer clientSocketServer)
         {
-            var sessionLogger = ServiceProvider.GetRequiredService<ILogger<NetworkSession>>();
+            var sessionLogger = _loggerFactory.CreateLogger<NetworkSession>();
             return new NetworkSession(_idGenerator.NextId(), clientSocketServer, sessionLogger) {PacketReceived = PacketFromClient };
         }
 

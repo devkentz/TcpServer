@@ -5,7 +5,7 @@ namespace Network.Server.Tcp.Core;
 
 public class MessageHandler
 {
-    private readonly Dictionary<long, Func<IServiceProvider, IActor, IMessage, Task<Response>>> _actorHandlers = new();
+    private readonly Dictionary<long, Func<IServiceProvider, IActor, IMessage, Task<Response>>> _actorHandlers = [];
 
     protected void AddHandler<TRequest>(
         long msgId,

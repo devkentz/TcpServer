@@ -15,13 +15,18 @@ public class Actor : IActor, IDisposable
     
     public NetworkSession Session => _session;
 
-    public Actor(ILogger logger, NetworkSession session, long actorId, IServiceProvider rootProvider)
+    public Actor(
+        ILogger logger,
+        NetworkSession session,
+        long actorId,
+        IServiceProvider rootProvider,
+        MessageHandler handler)
     {
         _rootProvider = rootProvider;
         ActorId = actorId;
         _session = session;
         _session.Actor = this;
-        _handler = _rootProvider.GetRequiredService<MessageHandler>();
+        _handler = handler;
         _messageQueue = new QueuedResponseWriter<ActorMessage>(ProcessMessageAsync, logger);
     }
 
