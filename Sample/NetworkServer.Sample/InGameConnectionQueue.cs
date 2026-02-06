@@ -17,6 +17,7 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
     private readonly UniqueIdGenerator _uniqueIdGenerator;
     private readonly ILogger<InGameConnectionQueue> _logger;
     private readonly IActorManager _actorManager;
+    private readonly MessageHandler _messageHandler;
     private readonly TimeProvider _timeProvider;
     private volatile bool _isDisposed = false;
     private readonly SemaphoreSlim _semaphoreSlim;
@@ -27,6 +28,7 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
         UniqueIdGenerator uniqueIdGenerator,
         ILogger<InGameConnectionQueue> logger,
         IActorManager actorManager,
+        MessageHandler messageHandler,
         IOptions<TcpServerConfig> tcpServerConfig,
         TimeProvider timeProvider)
     {
@@ -34,6 +36,7 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
         _uniqueIdGenerator = uniqueIdGenerator;
         _logger = logger;
         _actorManager = actorManager;
+        _messageHandler = messageHandler;
         _timeProvider = timeProvider;
         // _database = redisConnectionMultiplexer; // Redis Removed
 
@@ -77,7 +80,7 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
                 _actorManager.RemoveActor(existingActor.ActorId);
             }
 
-            var userActor = new UserActor(_logger, session, _uniqueIdGenerator.NextId(), req.ExternalId, _serviceProvider);
+            var userActor = new UserActor(_logger, session, _uniqueIdGenerator.NextId(), req.ExternalId, _serviceProvider, _messageHandler);
             _actorManager.TryAddActor(userActor);
             
             

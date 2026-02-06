@@ -15,8 +15,14 @@ public class UserActor : Actor
 {
     public readonly string ExternalId;
 
-    public UserActor(ILogger logger, NetworkSession session, long actorId, string externalId, IServiceProvider rootProvider)
-        : base(logger, session, actorId, rootProvider)
+    public UserActor(
+        ILogger logger,
+        NetworkSession session,
+        long actorId,
+        string externalId,
+        IServiceProvider rootProvider,
+        MessageHandler handler)
+        : base(logger, session, actorId, rootProvider, handler)
     {
         ExternalId = externalId;
     }
@@ -28,6 +34,7 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
     private readonly UniqueIdGenerator _uniqueIdGenerator;
     private readonly ILogger<InGameConnectionQueue> _logger;
     private readonly IActorManager _actorManager;
+    private readonly MessageHandler _messageHandler;
     private volatile bool _isDisposed = false;
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly CancellationTokenSource _cancellationToken;
@@ -37,12 +44,14 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
         UniqueIdGenerator uniqueIdGenerator,
         ILogger<InGameConnectionQueue> logger,
         IActorManager actorManager,
+        MessageHandler messageHandler,
         IOptions<TcpServerConfig> tcpServerConfig)
     {
         _serviceProvider = serviceProvider;
         _uniqueIdGenerator = uniqueIdGenerator;
         _logger = logger;
         _actorManager = actorManager;
+        _messageHandler = messageHandler;
 
         _cancellationToken = new CancellationTokenSource();
         var config = tcpServerConfig.Value;
@@ -70,7 +79,7 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
 
             _logger.LogInformation("Processing connection request for session {SessionId}", session.SessionId);
 
-            var userActor = new UserActor(_logger, session, _uniqueIdGenerator.NextId(), req.ExternalId, _serviceProvider);
+            var userActor = new UserActor(_logger, session, _uniqueIdGenerator.NextId(), req.ExternalId, _serviceProvider, _messageHandler);
 
             if (_actorManager.FirstOrDefault(e => (((UserActor)e).ExternalId == req.ExternalId)) is UserActor existingActor)
             {

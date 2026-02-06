@@ -7,8 +7,14 @@ namespace NetworkServer.Sample;
 public class UserActor : Actor
 {
     public string ExternalId { get; }
-    public UserActor(ILogger logger, NetworkSession session, long actorId, string externalId, IServiceProvider rootProvider)
-        : base(logger, session, actorId, rootProvider)
+    public UserActor(
+        ILogger logger,
+        NetworkSession session,
+        long actorId,
+        string externalId,
+        IServiceProvider rootProvider,
+        MessageHandler handler)
+        : base(logger, session, actorId, rootProvider, handler)
     {
         ExternalId = externalId;
     }
