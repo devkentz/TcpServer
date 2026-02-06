@@ -6,8 +6,8 @@ namespace Network.Server.Tcp.Core;
 
 public class Response(IMessage message, Header header)
 {
-    public IMessage Message { get; set; } = message;
-    public Header Header { get; set; } = header;
+    public IMessage Message { get; } = message;
+    public Header Header { get; } = header;
 
     public static Response Ok(IMessage message, ushort requestId = 0, PacketFlags flags = PacketFlags.None)
     {
