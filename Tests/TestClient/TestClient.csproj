@@ -19,7 +19,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\NetworkClient\NetworkClient.csproj" />
-        <ProjectReference Include="..\..\Protocol\Protocol.csproj" />
+        <ProjectReference Include="..\Protocol.Test\Protocol.Test.csproj" />
         <PackageReference Include="NetCoreServer" />
     </ItemGroup>
 

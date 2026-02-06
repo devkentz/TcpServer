@@ -101,25 +101,12 @@ namespace PacketParserGenerator
             sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
             sb.AppendLine("using System.Threading.Tasks;");
             sb.AppendLine("using Google.Protobuf;");
-            sb.AppendLine("using Network.Server.Front.Core;");
+            sb.AppendLine("using Network.Server.Tcp.Actor;");
+            sb.AppendLine("using Network.Server.Tcp.Core;");
             
             sb.AppendLine(@"
 namespace Network.Server.Generated
 {
-
-    public static class ServerMessageHandlerExtensions
-    {
-        public static IServiceCollection AddHandler(this IServiceCollection collection)
-        {
-            return collection.AddSingleton<MessageHandler>(_ =>
-            {
-                var handler = new GeneratedMessageHandler();
-                handler.Initialize();
-                return handler;
-            });
-        }
-    }
-
     public class GeneratedMessageHandler : MessageHandler
     {
         protected override void LoadHandlers()

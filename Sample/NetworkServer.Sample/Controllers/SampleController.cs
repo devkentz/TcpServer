@@ -1,8 +1,8 @@
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
-using Network.Server.Front.Actor;
-using Network.Server.Front.Core;
-using Proto.Test;
+using Network.Server.Tcp.Actor;
+using Network.Server.Tcp.Core;
+using Proto.Sample;
 
 namespace NetworkServer.Sample.Controllers;
 
@@ -24,8 +24,6 @@ public class SampleController(ILogger<SampleController> logger)
             
         return Task.FromResult(Response.Ok(new EchoRes
         {
-            
-            
             Message = $"{req.Message} (서버 응답)",
             Timestamp = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         }));

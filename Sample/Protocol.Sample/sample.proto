@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package proto.sample; // Changed package name to proto.sample
+
+// ===== Sample Messages =====
+
+// 에코 요청
+message EchoReq
+{
+    string message = 1;         // 에코할 메시지
+    int32 timestamp = 2;        // 타임스탬프
+}
+
+// 에코 응답
+message EchoRes
+{
+    string message = 1;         // 에코된 메시지
+    int32 timestamp = 2;        // 타임스탬프
+}
+
+message LoginGameReq
+{
+  string ExternalId = 1;
+}
+
+message LoginGameRes
+{
+  bool Success = 1;
+}
+
+enum ErrorCode
+{
+  InvalidError = 0;
+  ServerError = 1;
+}

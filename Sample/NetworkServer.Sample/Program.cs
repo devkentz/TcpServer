@@ -3,16 +3,16 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Network.Server.Common;
 using Network.Server.Common.Utils;
-using Network.Server.Front.Actor;
-using Network.Server.Front.Config;
-using Network.Server.Front.Core;
+using Network.Server.Tcp.Actor;
+using Network.Server.Tcp.Config;
+using Network.Server.Tcp.Core;
 using Network.Server.Generated;
 using NetworkServer.ProtoAutoGen;
 using NetworkServer.ProtoGenerator;
 using NetworkServer.Sample.Controllers;
 using Serilog;
 using Serilog.Events;
-using StackExchange.Redis;
+using Network.Server.Tcp.Extensions;
 
 namespace NetworkServer.Sample;
 
@@ -71,41 +71,11 @@ public class Program
             {
                 var configuration = context.Configuration;
 
-                // FrontServer 등록
-                services.AddHostedService<FrontServer>();
-
-                // Redis 연결 (InGameConnectionQueue용) - appsettings.json에서 읽기
-                var redisConnectionString = configuration.GetValue<string>("Redis:InGameConnectionQueue:ConnectionString", "localhost:6379");
-                var redisConnectTimeout = configuration.GetValue<int>("Redis:InGameConnectionQueue:ConnectTimeout", 5000);
-                var redisSyncTimeout = configuration.GetValue<int>("Redis:InGameConnectionQueue:SyncTimeout", 5000);
-                var redisAbortOnConnectFail = configuration.GetValue<bool>("Redis:InGameConnectionQueue:AbortOnConnectFail", false);
-
-                services.AddKeyedSingleton<IConnectionMultiplexer>(
-                    "InGameConnectionQueue",
-                    ConnectionMultiplexer.Connect(new ConfigurationOptions
-                    {
-                        EndPoints = { redisConnectionString },
-                        AbortOnConnectFail = redisAbortOnConnectFail,
-                        ConnectTimeout = redisConnectTimeout,
-                        SyncTimeout = redisSyncTimeout
-                    }));
-
-                // 클러스터 핵심 서비스 등록
-                services.AddSingleton<UniqueIdGenerator>(_ => new UniqueIdGenerator(Guid.NewGuid()));
-                services.AddSingleton<IApplicationStopper, HostApplicationStopper>();
-                services.AddSingleton<IInGameConnectionQueue, InGameConnectionQueue>();
-                services.AddSingleton<TimeProvider>(_ => TimeProvider.System);
-
-                // 핸들러 등록
-                services.AddHandler();
-
-                // Actor 관리자 등록
-                services.AddSingleton<IActorManager, ActorManager>();
-
+                // TcpServer 및 관련 Core 서비스 등록 (확장 메서드 사용)
+                services.AddTcpServer<InGameConnectionQueue>(configuration);
+                
+                
                 // 샘플 컨트롤러 등록
                 services.AddSingleton<SampleController>();
-                
-                // FrontServer 설정 - appsettings.json에서 읽기
-                services.Configure<FrontServerConfig>(configuration.GetSection("FrontServerConfig"));
             });
 }

@@ -1,15 +1,26 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Network.Server.Common.DistributeLock;
 using Network.Server.Common.Packets;
 using Network.Server.Common.Utils;
 using Network.Server.Tcp.Actor;
 using Network.Server.Tcp.Config;
 using Network.Server.Tcp.Core;
-using Proto.Sample;
+using Proto.Test;
 
-namespace NetworkServer.Sample;
+namespace NetworkEngine.Tests.Node;
+
+/// <summary>
+/// InGameConnection 요청을 큐로 처리하는 서비스
+/// </summary>
+public class UserActor : Actor
+{
+    public readonly string ExternalId;
+
+    public UserActor(ILogger logger, NetworkSession session, long actorId, string externalId, IServiceProvider rootProvider)
+        : base(logger, session, actorId, rootProvider)
+    {
+        ExternalId = externalId;
+    }
+}
 
 public class InGameConnectionQueue : IConnectionHandler, IDisposable
 {
@@ -17,7 +28,6 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
     private readonly UniqueIdGenerator _uniqueIdGenerator;
     private readonly ILogger<InGameConnectionQueue> _logger;
     private readonly IActorManager _actorManager;
-    private readonly TimeProvider _timeProvider;
     private volatile bool _isDisposed = false;
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly CancellationTokenSource _cancellationToken;
@@ -27,15 +37,12 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
         UniqueIdGenerator uniqueIdGenerator,
         ILogger<InGameConnectionQueue> logger,
         IActorManager actorManager,
-        IOptions<TcpServerConfig> tcpServerConfig,
-        TimeProvider timeProvider)
+        IOptions<TcpServerConfig> tcpServerConfig)
     {
         _serviceProvider = serviceProvider;
         _uniqueIdGenerator = uniqueIdGenerator;
         _logger = logger;
         _actorManager = actorManager;
-        _timeProvider = timeProvider;
-        // _database = redisConnectionMultiplexer; // Redis Removed
 
         _cancellationToken = new CancellationTokenSource();
         var config = tcpServerConfig.Value;
@@ -60,37 +67,28 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
             await _semaphoreSlim.WaitAsync(_cancellationToken.Token);
 
             var req = (LoginGameReq) message.Message;
-            
-            // Redis Lock Removed - Simplified for Sample
-            // var  database = _database.GetDatabase(); 
-            // await using var lockObj = await database.TryAcquireLockAsync(req.ExternalId); ...
-
-            //TODO : REDIS에 유저 세션 객체 저장 & 중복접속 처리
 
             _logger.LogInformation("Processing connection request for session {SessionId}", session.SessionId);
 
-            
-            // TODO : ExternalId 
-            if (_actorManager.FirstOrDefault(e => ((UserActor) e).ExternalId == req.ExternalId) is UserActor existingActor)
-            {
-                existingActor.Session.Disconnect();
-                _actorManager.RemoveActor(existingActor.ActorId);
-            }
-
             var userActor = new UserActor(_logger, session, _uniqueIdGenerator.NextId(), req.ExternalId, _serviceProvider);
+
+            if (_actorManager.FirstOrDefault(e => (((UserActor)e).ExternalId == req.ExternalId)) is UserActor existingActor)
+            {
+                _actorManager.RemoveActor(existingActor.ActorId);
+                existingActor.Session.Disconnect();
+            }
+            
             _actorManager.TryAddActor(userActor);
-            
-            
             session.SendToClient(new Header(msgId: LoginGameRes.MsgId, msgSeq: session.SequenceId++, requestId: message.Header.RequestId), new LoginGameRes {Success = true});
         }
         catch (OperationCanceledException e)
         {
-            _logger.LogInformation(e, "Processing connection request for session {SessionId}", session.SessionId);
+            _logger.LogInformation(e, "canceled request : {e}", e);
         }
         catch (Exception e)
         {
             _logger.LogInformation(e, "error {SessionId}", session.SessionId);
-            session.SendToClient(new Header(flags: PacketFlags.HasError, requestId: message.Header.RequestId, errorCode: (ushort) ErrorCode.ServerError), new LoginGameRes());
+            session.SendToClient(new Header(flags: PacketFlags.HasError, errorCode: (ushort) ErrorCode.ServerError, requestId: message.Header.RequestId), new LoginGameRes());
         }
         finally
         {

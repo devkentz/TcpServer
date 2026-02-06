@@ -1,4 +1,4 @@
-﻿namespace Network.Server;
+﻿namespace Network.Server.Common.Packets;
 
 public class PacketConfig
 {
