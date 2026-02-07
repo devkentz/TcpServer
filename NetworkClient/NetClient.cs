@@ -35,7 +35,6 @@ namespace NetworkClient
 
         public ClientState State => IsConnected ? ClientState.Connected : ClientState.Disconnected;
 
-        public ConnectorConfig ConnectorConfig { get; private set; } = new();
         public Action<bool>? OnConnect;
         public Action? OnDisconnect;
 
