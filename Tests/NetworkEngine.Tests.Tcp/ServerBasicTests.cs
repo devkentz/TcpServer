@@ -1,17 +1,12 @@
-using Internal.Protocol;
-using Network.Server.Common.Packets;
-using Proto.Test;
-using StackExchange.Redis;
 using Xunit;
 using Xunit.Abstractions;
 
 
 namespace NetworkEngine.Tests.Node;
 
-public class NodeBasicTests(ITestOutputHelper output) : IAsyncLifetime
+public class ServerBasicTests(ITestOutputHelper output) : IAsyncLifetime
 {
     private TestServerFactory _factory = null!;
-
 
     public Task InitializeAsync()
     {

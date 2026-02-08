@@ -93,8 +93,7 @@ public static class PacketExtensions
 
         int offset = 0;
 
-        // PacketSize
-        //BinaryPrimitives.WriteInt32LittleEndian(buffer[offset..], packetSize);
+        // packet_size preserve 
         offset += 4;
         
         // flags
