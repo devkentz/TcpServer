@@ -1,7 +1,5 @@
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Network.Server.Common.DistributeLock;
 using Network.Server.Common.Packets;
 using Network.Server.Common.Utils;
 using Network.Server.Tcp.Actor;
@@ -9,13 +7,13 @@ using Network.Server.Tcp.Config;
 using Network.Server.Tcp.Core;
 using Proto.Sample;
 
-namespace NetworkServer.Sample;
+namespace NetworkServer.Sample.Handler;
 
-public class InGameConnectionQueue : IConnectionHandler, IDisposable
+public class ConnectionHandler : IConnectionHandler, IDisposable
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly UniqueIdGenerator _uniqueIdGenerator;
-    private readonly ILogger<InGameConnectionQueue> _logger;
+    private readonly ILogger<ConnectionHandler> _logger;
     private readonly IActorManager _actorManager;
     private readonly MessageHandler _messageHandler;
     private readonly TimeProvider _timeProvider;
@@ -23,10 +21,10 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly CancellationTokenSource _cancellationToken;
 
-    public InGameConnectionQueue(
+    public ConnectionHandler(
         IServiceProvider serviceProvider,
         UniqueIdGenerator uniqueIdGenerator,
-        ILogger<InGameConnectionQueue> logger,
+        ILogger<ConnectionHandler> logger,
         IActorManager actorManager,
         MessageHandler messageHandler,
         IOptions<TcpServerConfig> tcpServerConfig,

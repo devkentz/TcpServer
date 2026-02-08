@@ -26,6 +26,7 @@
         <PackageReference Include="Serilog.Sinks.XUnit" />
     </ItemGroup>
     <ItemGroup>
+        <ProjectReference Include="..\..\NetworkClient\NetworkClient.csproj" />
         <ProjectReference Include="..\..\NetworkServer.TcpServer\NetworkServer.TcpServer.csproj" />
         <ProjectReference Include="..\..\NetworkServer.Common\NetworkServer.Common.csproj"/>
         <ProjectReference Include="..\Protocol.Test\Protocol.Test.csproj" />

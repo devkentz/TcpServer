@@ -1,23 +1,33 @@
-using Network.Server.Common;
-using Network.Server.Common.Utils;
-using Network.Server.Tcp.Actor;
+using Microsoft.Extensions.Options;
 using Network.Server.Tcp.Config;
-using Network.Server.Tcp.Core;
 using Network.Server.Tcp.Extensions;
-using Network.Server.Generated;
-using NetworkEngine.Tests.Node.Controller;
+using NetworkClient.Network;
+using NetworkEngine.Tests.Node.ServerTest.Controller;
+using NetworkEngine.Tests.Node.ServerTest.Handler;
 using Serilog;
 using Serilog.Events;
 using Xunit.Abstractions;
 
-namespace NetworkEngine.Tests.Node;
+namespace NetworkEngine.Tests.Node.TestHelper;
 
-public class TestServerFactory : IAsyncDisposable
+public class TestObjectFactory : IAsyncDisposable
 {
     private readonly List<IHost> _hosts = [];
+    
+    public record TcpConnectionInfo(string Address, int Port);
 
+    public record TestServerRecord(IHost Host, TcpConnectionInfo ConnectionInfo)
+    {
+        public Task StartAsync() => Host.StartAsync();
+        public Task StopAsync() => Host.StopAsync();
+    }
 
-    public async Task<IHost> CreateNodeAsync(ITestOutputHelper? output = null)
+    public TestClient CreateTestClient(TcpConnectionInfo connectionInfo, ITestOutputHelper? output = null)
+    {
+        return new TestClient(connectionInfo.Address, connectionInfo.Port, output);
+    }
+    
+    public async Task<TestServerRecord> CreateNodeAsync(ITestOutputHelper? output = null)
     {
 
         try
@@ -41,7 +51,7 @@ public class TestServerFactory : IAsyncDisposable
                 .ConfigureServices((context, services) =>
                 {
                     // TcpServer 및 관련 Core 서비스 등록 (확장 메서드 사용)
-                    services.AddTcpServer<InGameConnectionQueue>(context.Configuration);
+                    services.AddTcpServer<ConnectionHandler>(context.Configuration);
                     services.AddSingleton<TestController>();
 
                     services.Configure<TcpServerConfig>(options =>
@@ -52,10 +62,11 @@ public class TestServerFactory : IAsyncDisposable
                 });
 
             var host = await hostBuilder.StartAsync();
-            //var server = host.Services.GetRequiredService<TcpServer>();
             _hosts.Add(host);
-
-            return host;
+            
+            
+            var option =  host.Services.GetRequiredService<IOptions<TcpServerConfig>>().Value;
+            return new TestServerRecord(host, new TcpConnectionInfo(option.Address, option.Port));
         }
         catch (Exception e)
         {

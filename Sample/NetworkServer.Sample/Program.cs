@@ -6,6 +6,7 @@ using NetworkServer.ProtoGenerator;
 using NetworkServer.Sample.Controllers;
 using Serilog;
 using Network.Server.Tcp.Extensions;
+using NetworkServer.Sample.Handler;
 
 namespace NetworkServer.Sample;
 
@@ -60,7 +61,7 @@ public class Program
                 var configuration = context.Configuration;
 
                 // TcpServer 및 관련 Core 서비스 등록 (확장 메서드 사용)
-                services.AddTcpServer<InGameConnectionQueue>(configuration);
+                services.AddTcpServer<ConnectionHandler>(configuration);
                 
                 // 샘플 컨트롤러 등록
                 services.AddSingleton<SampleController>();

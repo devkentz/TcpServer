@@ -2,7 +2,7 @@
 using Network.Server.Tcp.Core;
 using Proto.Test;
 
-namespace NetworkEngine.Tests.Node.Controller
+namespace NetworkEngine.Tests.Node.ServerTest.Controller
 {
     [ServerController]
     public class TestController(ILogger<TestController> logger)

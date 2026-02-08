@@ -1,51 +1,27 @@
-using Microsoft.Extensions.Options;
 using Network.Server.Common.Packets;
 using Network.Server.Common.Utils;
 using Network.Server.Tcp.Actor;
-using Network.Server.Tcp.Config;
 using Network.Server.Tcp.Core;
 using Proto.Test;
 
-namespace NetworkEngine.Tests.Node;
+namespace NetworkEngine.Tests.Node.ServerTest.Handler;
 
-/// <summary>
-/// InGameConnection 요청을 큐로 처리하는 서비스
-/// </summary>
-public class UserActor : Actor
-{
-    public readonly string ExternalId;
-
-    public UserActor(
-        ILogger logger,
-        NetworkSession session,
-        long actorId,
-        string externalId,
-        IServiceProvider rootProvider,
-        MessageHandler handler)
-        : base(logger, session, actorId, rootProvider, handler)
-    {
-        ExternalId = externalId;
-    }
-}
-
-public class InGameConnectionQueue : IConnectionHandler, IDisposable
+public class ConnectionHandler : IConnectionHandler, IDisposable
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly UniqueIdGenerator _uniqueIdGenerator;
-    private readonly ILogger<InGameConnectionQueue> _logger;
+    private readonly ILogger<ConnectionHandler> _logger;
     private readonly IActorManager _actorManager;
     private readonly MessageHandler _messageHandler;
-    private volatile bool _isDisposed = false;
-    private readonly SemaphoreSlim _semaphoreSlim;
+    private volatile bool _isDisposed;
     private readonly CancellationTokenSource _cancellationToken;
 
-    public InGameConnectionQueue(
+    public ConnectionHandler(
         IServiceProvider serviceProvider,
         UniqueIdGenerator uniqueIdGenerator,
-        ILogger<InGameConnectionQueue> logger,
+        ILogger<ConnectionHandler> logger,
         IActorManager actorManager,
-        MessageHandler messageHandler,
-        IOptions<TcpServerConfig> tcpServerConfig)
+        MessageHandler messageHandler)
     {
         _serviceProvider = serviceProvider;
         _uniqueIdGenerator = uniqueIdGenerator;
@@ -54,8 +30,6 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
         _messageHandler = messageHandler;
 
         _cancellationToken = new CancellationTokenSource();
-        var config = tcpServerConfig.Value;
-        _semaphoreSlim = new SemaphoreSlim(config.LoginConcurrentSize, config.LoginConcurrentSize);
     }
 
     public void EnqueueAsync(NetworkSession session, ActorMessage message)
@@ -69,24 +43,22 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
         return msgId == LoginGameReq.MsgId;
     }
 
-    private async Task ProcessConnectionAsync(NetworkSession session, ActorMessage message)
+    private Task ProcessConnectionAsync(NetworkSession session, ActorMessage message)
     {
         try
         {
-            await _semaphoreSlim.WaitAsync(_cancellationToken.Token);
-
             var req = (LoginGameReq) message.Message;
 
             _logger.LogInformation("Processing connection request for session {SessionId}", session.SessionId);
 
             var userActor = new UserActor(_logger, session, _uniqueIdGenerator.NextId(), req.ExternalId, _serviceProvider, _messageHandler);
 
-            if (_actorManager.FirstOrDefault(e => (((UserActor)e).ExternalId == req.ExternalId)) is UserActor existingActor)
+            if (_actorManager.FirstOrDefault(e => (((UserActor) e).ExternalId == req.ExternalId)) is UserActor existingActor)
             {
                 _actorManager.RemoveActor(existingActor.ActorId);
                 existingActor.Session.Disconnect();
             }
-            
+
             _actorManager.TryAddActor(userActor);
             session.SendToClient(new Header(msgId: LoginGameRes.MsgId, msgSeq: session.SequenceId++, requestId: message.Header.RequestId), new LoginGameRes {Success = true});
         }
@@ -99,10 +71,8 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
             _logger.LogInformation(e, "error {SessionId}", session.SessionId);
             session.SendToClient(new Header(flags: PacketFlags.HasError, errorCode: (ushort) ErrorCode.ServerError, requestId: message.Header.RequestId), new LoginGameRes());
         }
-        finally
-        {
-            _semaphoreSlim.Release();
-        }
+        
+        return Task.CompletedTask;
     }
 
     public void Dispose()
@@ -114,6 +84,5 @@ public class InGameConnectionQueue : IConnectionHandler, IDisposable
 
         _cancellationToken.Cancel();
         _cancellationToken.Dispose();
-        _semaphoreSlim.Dispose();
     }
 }
